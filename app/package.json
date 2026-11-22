@@ -1,0 +1,7 @@
+{
+  "name": "@nhse/app",
+  "version": "0.0.0",
+  "private": true,
+  "license": "GPL-3.0-only",
+  "type": "module"
+}
