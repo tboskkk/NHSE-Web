@@ -62,3 +62,9 @@ test("every revision carries main save offsets; item acre width is 9 from 3.0.0"
     expect(o.fieldItemAcreWidth).toBe(r.index >= 31 ? 9 : 7);
   }
 });
+
+test("building type names are exported for every type the example island uses", () => {
+  const names = (items as unknown as { buildingTypeNames: string[] }).buildingTypeNames;
+  expect(names[0]).toBe("None");
+  for (const t of [1, 9, 10, 21, 22, 23]) expect(names[t]!.length).toBeGreaterThan(0);
+});

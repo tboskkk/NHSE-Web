@@ -30,3 +30,25 @@ test("tileToWorld gives the tile's top-left corner", () => {
   expect(tileToWorld(grid, 0, 0)).toEqual({ x: 512, y: 512 });
   expect(tileToWorld(grid, 3, 2)).toEqual({ x: 512 + 48, y: 512 + 32 });
 });
+
+import { visibleTileRange } from "../../app/src/map/tiles";
+
+const view = { w: 800, h: 600 };
+
+test("visibleTileRange: whole grid when zoomed out, clamped to the grid", () => {
+  const r = visibleTileRange({ x: 0, y: 0, zoom: 0.1 }, view, grid);
+  expect(r).toEqual({ x0: 0, y0: 0, x1: 111, y1: 95 });
+});
+
+test("visibleTileRange: a zoomed-in window covers just the tiles on screen (inclusive)", () => {
+  // camera at tile (10,20); 800x600 px at zoom 4 = 200x150 world px = 12.5x9.4 tiles of 16px
+  const r = visibleTileRange({ x: 512 + 160, y: 512 + 320, zoom: 4 }, view, grid);
+  expect(r).toEqual({ x0: 10, y0: 20, x1: 22, y1: 29 });
+});
+
+test("visibleTileRange is empty (x1 < x0) when the camera looks away from the grid", () => {
+  const r = visibleTileRange({ x: 100000, y: 100000, zoom: 1 }, view, grid);
+  expect(r.x1).toBeLessThan(r.x0);
+  const nan = visibleTileRange({ x: NaN, y: 0, zoom: 1 }, view, grid);
+  expect(nan.x1).toBeLessThan(nan.x0);
+});

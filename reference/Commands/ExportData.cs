@@ -136,6 +136,7 @@ public static class ExportData
             kindNames = EnumTable<ItemKind>(),
             menuIcon = icons,
             menuIconNames = EnumTable<ItemMenuIconType>(),
+            buildingTypeNames = EnumTable<BuildingType>(),
             kindGroups = new
             {
                 furniture = KindNames(k => k.IsFurniture),
