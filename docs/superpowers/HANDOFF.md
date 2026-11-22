@@ -40,5 +40,8 @@ bun run gen:data                                       # regenerates generated/*
 - Hash warning is a dismissible banner; spec says warn before allowing edits.
 - The E2E test leaves a zip of the personal save in os.tmpdir(); an untracked git-ignored `test-results/` dir may exist.
 
+## P2b buildings (in progress)
+Spec `docs/superpowers/specs/2026-11-22-map-editor-buildings-design.md` and plan `docs/superpowers/plans/2026-11-22-map-editor-buildings.md` are written and committed (97b725f, 9c4a07c), not yet approved for execution by the owner. Execution: native inline, TDD, every deviation a `Ruling:` line in the commit body, report all Rulings at the end. Task 1 first (confirm stored building units/rules against the example save; stop and report if the unit reading is wrong). Local commits are ahead of origin; do not push without asking.
+
 ## Next
 Finish map-viewer (Tasks 11-12 + final review + merge decision), then P2 map editor (brushes, undo, placement; own brainstorm), spike S in parallel, villagers/collections later.
