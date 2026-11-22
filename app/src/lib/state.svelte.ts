@@ -27,7 +27,11 @@ export const app = $state({
   hashWarningDismissed: false,
   /** Redo stack depth, tracked here so the button can disable. */
   redoable: 0,
+  /** history.length at the last successful save (in place or zip): the rest are unsaved. */
+  savedCount: 0,
 });
+
+export const unsavedCount = () => Math.max(0, app.history.length - app.savedCount);
 
 let toastTimer: ReturnType<typeof setTimeout> | undefined;
 export function showToast(message: string) {
@@ -40,6 +44,7 @@ export const canSaveInPlace = () => app.folder !== null && supportsFsAccess();
 export { supportsFsAccess };
 
 async function load(getFiles: () => Promise<{ files: Map<string, Uint8Array>; folder?: FileSystemDirectoryHandle }>) {
+  if (app.loaded && unsavedCount() > 0 && !confirm(`You have ${unsavedCount()} unsaved change(s). Open a different save and discard them?`)) return;
   app.error = null;
   app.busy = true;
   try {
@@ -48,6 +53,7 @@ async function load(getFiles: () => Promise<{ files: Map<string, Uint8Array>; fo
     app.loaded = result;
     app.folder = folder ?? null;
     app.history = [];
+    app.savedCount = 0;
     app.redoable = 0;
     app.backedUp = false;
     app.playerIndex = 0;
@@ -76,8 +82,17 @@ async function refreshSummary() {
   if (app.loaded) app.loaded = { ...app.loaded, island: s.island, players: s.players };
 }
 
+/** Edits that have started but not finished, so Save can wait for a field that just committed. */
+const pending = new Set<Promise<unknown>>();
+const track = <T>(p: Promise<T>): Promise<T> => {
+  pending.add(p);
+  return p.finally(() => pending.delete(p));
+};
+
 /** Applies an edit op through the worker; the single entry point for UI edits. */
-export async function edit(op: EditOp) {
+export const edit = (op: EditOp) => track(doEdit(op));
+
+async function doEdit(op: EditOp) {
   await saving;
   try {
     const r = await api.edit(op);
@@ -97,6 +112,7 @@ export async function undo() {
   if (!app.history.length) return;
   if (await api.undo()) {
     app.history = app.history.slice(0, -1);
+    app.savedCount = Math.min(app.savedCount, app.history.length);
     app.redoable++;
     await refreshSummary();
     app.rev++;
@@ -118,7 +134,10 @@ export async function redo() {
 function exclusive(fn: () => Promise<void>): Promise<void> {
   if (saving) return saving;
   app.busy = true;
-  const run = fn().finally(() => {
+  const run = (async () => {
+    while (pending.size) await Promise.allSettled([...pending]);
+    await fn();
+  })().finally(() => {
     saving = null;
     app.busy = false;
   });
@@ -137,6 +156,7 @@ export const saveInPlace = () =>
       const files = await api.build("changed");
       await writeFiles(app.folder, files);
       await api.commit(); // only after every file is written: a failed write stays pending for the retry
+      app.savedCount = app.history.length;
       showToast(files.size === 0 ? "Nothing to save" : `Saved ${files.size} files`);
     } catch (e) {
       showToast(`Save failed: ${e instanceof Error ? e.message : String(e)}`);
@@ -149,6 +169,7 @@ export const saveZip = () =>
     try {
       // A zip download is not an in-place write, so it does not reset the changed set.
       downloadBytes(toZip(await api.build("all"), app.loaded.island), saveZipName(app.loaded.island, new Date()));
+      app.savedCount = app.history.length;
     } catch (e) {
       showToast(`Save failed: ${e instanceof Error ? e.message : String(e)}`);
     }

@@ -51,3 +51,34 @@ goldenTest("a batch of 3 setItem ops is one undo step", async () => {
   session.undo();
   expect(session.dirtyPairs().size).toBe(0);
 });
+
+goldenTest("applyOp rejects out-of-range values without touching any byte", async () => {
+  const sav = await HorizonSave.load(readDir(SAVE!));
+  const before = sav.pairs().map((p) => p.data.slice());
+  const bad: EditOp[] = [
+    { op: "wallet", player: 0, value: -1 },
+    { op: "wallet", player: 0, value: 2 ** 32 },
+    { op: "wallet", player: 0, value: 1.5 },
+    { op: "bank", player: 0, value: Number.NaN },
+    { op: "itemChestCount", player: 0, value: -5 },
+    { op: "birthday", player: 0, month: 13, day: 1 },
+    { op: "birthday", player: 0, month: 2, day: 30 },
+    { op: "birthday", player: 0, month: 0, day: 1 },
+    { op: "profileFruit", player: 0, value: 70000 },
+    { op: "setItem", player: 0, area: "pocket", slot: 0, raw: "zz" },
+    { op: "wallet", player: 9, value: 1 },
+  ];
+  for (const op of bad) expect(() => applyOp(sav, op), JSON.stringify(op)).toThrow();
+  sav.pairs().forEach((p, i) => expect(Buffer.from(p.data).equals(Buffer.from(before[i]!))).toBe(true));
+  // boundary values are fine
+  applyOp(sav, { op: "wallet", player: 0, value: 2 ** 32 - 1 });
+  applyOp(sav, { op: "birthday", player: 0, month: 2, day: 29 });
+});
+
+goldenTest("a failing op inside a batch leaves no partial edit when run through EditSession", async () => {
+  const sav = await HorizonSave.load(readDir(SAVE!));
+  const session = new EditSession(sav);
+  const batch: EditOp = { op: "batch", label: "x", ops: [{ op: "wallet", player: 0, value: 5 }, { op: "birthday", player: 0, month: 13, day: 1 }] };
+  expect(() => session.apply("x", (s) => applyOp(s, batch))).toThrow();
+  expect(session.dirtyPairs().size).toBe(0);
+});

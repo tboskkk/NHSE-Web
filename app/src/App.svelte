@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { app, openDrop, redo, save, undo } from "./lib/state.svelte";
+  import { app, openDrop, redo, save, undo, unsavedCount } from "./lib/state.svelte";
   import EmptyState from "./components/EmptyState.svelte";
   import HashWarning from "./components/HashWarning.svelte";
   import Sidebar from "./components/Sidebar.svelte";
@@ -13,7 +13,11 @@
     const typing = (e.target as HTMLElement | null)?.matches?.("input, textarea, select, [contenteditable]");
     const mod = e.ctrlKey || e.metaKey;
     const k = e.key.toLowerCase();
-    if (mod && k === "s") { e.preventDefault(); if (app.loaded) save(); }
+    if (mod && k === "s") {
+      e.preventDefault();
+      (document.activeElement as HTMLElement | null)?.blur(); // commit a field still being typed in
+      if (app.loaded && !e.repeat) save();
+    }
     else if (mod && k === "z" && !typing) { e.preventDefault(); e.shiftKey ? redo() : undo(); }
     else if (mod && k === "y" && !typing) { e.preventDefault(); redo(); }
     else if (e.key === "/" && !typing && !mod) {
@@ -30,6 +34,7 @@
 </script>
 
 <svelte:window
+  onbeforeunload={(e) => { if (app.loaded && unsavedCount() > 0) e.preventDefault(); }}
   {onkeydown}
   ondragover={(e) => { e.preventDefault(); dragging = true; }}
   ondragleave={(e) => { if (!e.relatedTarget) dragging = false; }}

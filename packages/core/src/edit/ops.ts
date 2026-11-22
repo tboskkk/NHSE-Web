@@ -59,7 +59,63 @@ function itemAt(pe: Personal, r: SlotRef): Item {
   return it;
 }
 
+const MONTH_DAYS = [31, 29, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31];
+
+const uint = (name: string, v: number, max: number) => {
+  if (!Number.isInteger(v) || v < 0 || v > max) throw new RangeError(`${name} must be a whole number from 0 to ${max.toLocaleString("en-US")}, got ${v}`);
+};
+
+/** Throws RangeError/Error for an op that would write a wrong or wrapped value; touches nothing. */
+export function validateOp(save: HorizonSave, op: EditOp): void {
+  if (op.op === "batch") {
+    for (const o of op.ops) validateOp(save, o);
+    return;
+  }
+  if (op.op !== "townName") personalOf(save, op.player);
+  switch (op.op) {
+    case "wallet":
+    case "bank":
+    case "nookMiles":
+    case "totalNookMiles":
+    case "hotelTickets":
+    case "pocketCount":
+    case "bagCount":
+    case "itemChestCount":
+      return uint(op.op, op.value, 0xffffffff);
+    case "profileFruit":
+      return uint(op.op, op.value, 0xffff);
+    case "birthday":
+      uint("month", op.month, 12);
+      if (op.month < 1) throw new RangeError("month must be 1-12");
+      uint("day", op.day, MONTH_DAYS[op.month - 1]!);
+      if (op.day < 1) throw new RangeError("day must be at least 1");
+      return;
+    case "setItem": {
+      parseRaw(op.raw);
+      const n = personalOf(save, op.player).slotCount(op.area);
+      if (!Number.isInteger(op.slot) || op.slot < 0 || op.slot >= n) throw new RangeError(`${op.area} slot ${op.slot} is out of range`);
+      return;
+    }
+    case "moveItem": {
+      const pe = personalOf(save, op.player);
+      for (const r of [op.from, op.to]) {
+        const n = pe.slotCount(r.area);
+        if (!Number.isInteger(r.slot) || r.slot < 0 || r.slot >= n) throw new RangeError(`${r.area} slot ${r.slot} is out of range`);
+      }
+      return;
+    }
+    case "playerName":
+    case "townName":
+      return;
+  }
+}
+
 export function applyOp(save: HorizonSave, op: EditOp): void {
+  validateOp(save, op);
+  applyValidated(save, op);
+}
+
+function applyValidated(save: HorizonSave, op: EditOp): void {
   switch (op.op) {
     case "wallet":
     case "bank":
@@ -109,7 +165,7 @@ export function applyOp(save: HorizonSave, op: EditOp): void {
       return;
     }
     case "batch":
-      for (const o of op.ops) applyOp(save, o);
+      for (const o of op.ops) applyValidated(save, o);
       return;
   }
 }

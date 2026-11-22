@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { app, redo, undo } from "../lib/state.svelte";
+  import { app, redo, undo, unsavedCount } from "../lib/state.svelte";
   import SaveMenu from "./SaveMenu.svelte";
   let showChanges = $state(false);
 </script>
@@ -12,7 +12,7 @@
   <button onclick={redo} disabled={!app.redoable} title="Redo (Ctrl+Shift+Z)" aria-label="Redo">↷</button>
   <div class="changes">
     <button onclick={() => (showChanges = !showChanges)} aria-expanded={showChanges} disabled={!app.history.length}>
-      {app.history.length} {app.history.length === 1 ? "change" : "changes"}
+      {unsavedCount()} unsaved {unsavedCount() === 1 ? "change" : "changes"}
     </button>
     {#if showChanges && app.history.length}
       <ol class="pop">

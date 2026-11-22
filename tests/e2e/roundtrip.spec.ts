@@ -34,17 +34,16 @@ test("load zip → edit wallet → save zip → reload → value persisted", asy
 
   const wallet = page.getByLabel("Wallet (Bells)");
   await wallet.fill("4321");
-  await wallet.press("Enter");
-  await expect(page.getByRole("button", { name: /1 change/ })).toBeVisible();
-
+  // No Enter/blur: Ctrl+S must commit the field that is still focused.
   const download = page.waitForEvent("download");
   await page.keyboard.press("Control+s"); // zip mode: no folder is open
   const saved = join(tmp, "saved.zip");
   await (await download).saveAs(saved);
+  await expect(page.getByRole("button", { name: /0 unsaved changes/ })).toBeVisible();
 
   await page.goto("/");
   await page.locator('input[type=file][accept=".zip"]').setInputFiles(saved);
   await expect(page.getByLabel("Wallet (Bells)")).toHaveValue("4321");
   await expect(page.locator("#pname")).toHaveValue(name);
-  await expect(page.getByRole("button", { name: /0 changes/ })).toBeVisible();
+  await expect(page.getByRole("button", { name: /0 unsaved changes/ })).toBeVisible();
 });
