@@ -1,20 +1,19 @@
-# Handoff — NHSE-Web (foundation + map viewer shipped; map editor P2a (items) on branch `map-editor-items`)
+# Handoff — NHSE-Web (foundation, map viewer and map item editor P2a all merged to main and pushed)
 
 **Repo:** https://github.com/tboskkk/NHSE-Web (public) · **Live app:** https://tboskkk.github.io/NHSE-Web/ · **Branch:** `main` only (feature branches merged and deleted)
 **Plan/spec (done):** `docs/superpowers/plans/2026-11-22-nhse-web-foundation.md`, `docs/superpowers/specs/2026-11-22-nhse-web-foundation-design.md`
 
 ## State
 - **main**: foundation complete (see below), 81 tests at that point.
-- **main**: foundation + map viewer P1 (merged, pushed).
-- **Branch `map-editor-items`** (NOT merged, NOT pushed; ask before pushing): map editor P2a, plan tasks 1-10 done (final review pending). Spec `docs/superpowers/specs/2026-11-22-map-editor-items-design.md`, plan `docs/superpowers/plans/2026-11-22-map-editor-items.md`. P2b (buildings) and P2c (terrain) are separate specs, in that order.
+- **main** (origin/main = 436c04c + this doc commit locally): foundation, map viewer P1, map item editor P2a, all merged and pushed. Specs/plans under `docs/superpowers/{specs,plans}/` (`2026-11-22-map-editor-items-*`). Next: P2b buildings, P2c terrain (each own brainstorm/spec/plan), spike S, villagers/collections. 186 unit tests + 4 e2e pass with `NHSE_TEST_SAVE`.
 - **Spike S (personal sprite pipeline) not started**: decode a model from `~/Games/ACNH/romfs` (zstd `.zs`, BFRES) and render a top-down/iso PNG named `NNNNN_V.png` into git-ignored `personal-sprites/`; import via the Map page. Never commit Nintendo art. Time-boxed, no product code.
 
 ## Resume commands
 ```
 export DOTNET_ROOT=~/.dotnet PATH=~/.dotnet:$PATH      # .NET 10 SDK in ~/.dotnet (reference CLI only)
-git checkout map-viewer && git submodule update --init && bun install
+git checkout main && git submodule update --init && bun install
 dotnet build reference -c Release                      # golden tests use `dotnet run --no-build`
-NHSE_TEST_SAVE=$PWD/example-save-file bun test         # 130 pass on map-viewer
+NHSE_TEST_SAVE=$PWD/example-save-file bun test         # 186 pass
 NHSE_TEST_SAVE=$PWD/example-save-file bunx playwright test
 bun run typecheck && bun run build
 bun run gen:data                                       # regenerates generated/*.json and app/public/data|sprites from the oracle
