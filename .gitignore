@@ -6,3 +6,5 @@ dist/
 reference/bin/
 reference/obj/
 .superpowers/
+test-results/
+playwright-report/
