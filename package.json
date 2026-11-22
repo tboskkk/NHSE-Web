@@ -1,0 +1,20 @@
+{
+  "name": "nhse-web",
+  "private": true,
+  "version": "0.0.0",
+  "license": "GPL-3.0-only",
+  "workspaces": ["packages/*", "app"],
+  "scripts": {
+    "test": "bun test tests/unit tests/golden",
+    "test:e2e": "playwright test",
+    "typecheck": "tsc -p packages/core && tsc -p packages/io && cd app && bunx svelte-check --tsconfig ./tsconfig.json",
+    "build": "cd app && bunx vite build",
+    "vectors": "bun scripts/vectors.ts",
+    "gen:data": "bun scripts/gen-data.ts"
+  },
+  "devDependencies": {
+    "@playwright/test": "^1.65.1",
+    "@types/bun": "latest",
+    "typescript": "^5.6.0"
+  }
+}

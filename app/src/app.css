@@ -1,0 +1,24 @@
+:root {
+  color-scheme: light dark;
+  --bg: #f6f7f4; --surface: #ffffff; --surface-2: #eef0ea; --border: #d8dcd2;
+  --text: #1d2a1f; --muted: #5d6b5f; --accent: #2f8f4e; --accent-text: #ffffff;
+  --warn-bg: #fff4d6; --warn-text: #5a4300; --error: #b3261e; --radius: 8px;
+}
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg: #141a15; --surface: #1c241e; --surface-2: #243026; --border: #334336;
+    --text: #e6ede7; --muted: #9bab9e; --accent: #4cc16f; --accent-text: #0b140d;
+    --warn-bg: #3a3012; --warn-text: #f3d98a; --error: #f2b8b5;
+  }
+}
+* { box-sizing: border-box; }
+html, body { margin: 0; height: 100%; }
+body { background: var(--bg); color: var(--text); font: 15px/1.45 system-ui, sans-serif; }
+button { font: inherit; color: inherit; background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); padding: 6px 12px; cursor: pointer; }
+button:hover:not(:disabled) { background: var(--surface-2); }
+button:disabled { opacity: 0.45; cursor: default; }
+button.primary { background: var(--accent); color: var(--accent-text); border-color: var(--accent); font-weight: 600; }
+button:focus-visible, input:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+input { font: inherit; color: inherit; background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); padding: 6px 8px; }
+.muted { color: var(--muted); }
+.visually-hidden { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); }

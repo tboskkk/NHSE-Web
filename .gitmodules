@@ -1,0 +1,3 @@
+[submodule "vendor/NHSE"]
+	path = vendor/NHSE
+	url = https://github.com/kwsch/NHSE
