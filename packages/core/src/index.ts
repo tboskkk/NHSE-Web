@@ -22,3 +22,4 @@ export * from "./map/flags";
 export * from "./map/geometry";
 export * from "./map/ground";
 export * from "./map/placement";
+export * from "./map/applyMapEdit";
