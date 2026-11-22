@@ -1,0 +1,26 @@
+{
+  "seed": 305419896,
+  "scenarios": [
+    { "name": "wallet", "ops": [{ "op": "wallet", "player": 0, "value": 12345 }] },
+    { "name": "bank", "ops": [{ "op": "bank", "player": 0, "value": 999999999 }] },
+    { "name": "nookMiles", "ops": [{ "op": "nookMiles", "player": 0, "value": 50000 }] },
+    { "name": "playerName", "ops": [{ "op": "playerName", "player": 0, "value": "Tester" }] },
+    { "name": "birthday", "ops": [{ "op": "birthday", "player": 0, "month": 7, "day": 4 }] },
+    { "name": "goldenShovel", "ops": [{ "op": "setItem", "player": 0, "area": "pocket", "slot": 2, "raw": "000000000000217e" }] },
+    { "name": "moveItem", "ops": [{ "op": "moveItem", "player": 0, "from": { "area": "pocket", "slot": 0 }, "to": { "area": "bag", "slot": 5 } }] },
+    { "name": "itemChestCount", "ops": [{ "op": "itemChestCount", "player": 0, "value": 5000 }] },
+    {
+      "name": "all",
+      "ops": [
+        { "op": "wallet", "player": 0, "value": 12345 },
+        { "op": "bank", "player": 0, "value": 999999999 },
+        { "op": "nookMiles", "player": 0, "value": 50000 },
+        { "op": "playerName", "player": 0, "value": "Tester" },
+        { "op": "birthday", "player": 0, "month": 7, "day": 4 },
+        { "op": "setItem", "player": 0, "area": "pocket", "slot": 2, "raw": "000000000000217e" },
+        { "op": "moveItem", "player": 0, "from": { "area": "pocket", "slot": 0 }, "to": { "area": "bag", "slot": 5 } },
+        { "op": "itemChestCount", "player": 0, "value": 5000 }
+      ]
+    }
+  ]
+}
