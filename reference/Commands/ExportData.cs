@@ -40,6 +40,7 @@ public static class ExportData
             foreach (var p in po.GetType().GetProperties().Where(p => p.PropertyType == typeof(int) && p.GetIndexParameters().Length == 0))
                 offs[p.Name] = (int)p.GetValue(po)!;
 
+            var mo = MainSaveOffsets.GetOffsets(h);
             result[i] = new
             {
                 index = i,
@@ -56,6 +57,7 @@ public static class ExportData
                     ["wherearen.dat"] = HashFile(hash, "wherearen.dat"),
                 },
                 personalOffsets = offs,
+                mainOffsets = Dump.MainOffsets(mo),
             };
         }
         return result;

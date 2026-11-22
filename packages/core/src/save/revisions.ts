@@ -13,6 +13,16 @@ export type FileHeaderInfo = {
 export type HashRegion = { hashOffset: number; start: number; length: number };
 export type HashFile = { size: number; regions: HashRegion[] };
 
+/** Per-revision locations in main.dat used by the map (upstream MainSaveOffsets). */
+export type MainOffsets = {
+  fieldItem: number;
+  landMakingMap: number;
+  mainFieldStructure: number;
+  outsideField: number;
+  /** Field item layer width in acres: 7 before 3.0.0, 9 from 3.0.0 (height is always 6). */
+  fieldItemAcreWidth: number;
+};
+
 export type Revision = {
   index: number;
   label: string;
@@ -20,6 +30,7 @@ export type Revision = {
   sizes: { main: number; personal: number; photoStudioIsland: number; postBox: number; profile: number; whereAreN: number };
   hash: Record<string, HashFile | null>;
   personalOffsets: Record<string, number>;
+  mainOffsets: MainOffsets;
 };
 
 export const REVISIONS: readonly Revision[] = revisionData as unknown as Revision[];

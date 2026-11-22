@@ -35,6 +35,15 @@ public static class Dump
         };
     }
 
+    public static object MainOffsets(MainSaveOffsets o) => new
+    {
+        fieldItem = o.FieldItem,
+        landMakingMap = o.LandMakingMap,
+        mainFieldStructure = o.MainFieldStructure,
+        outsideField = o.OutsideField,
+        fieldItemAcreWidth = (int)o.FieldItemAcreWidth,
+    };
+
     public static void Run(string saveDir, string outDir)
     {
         var sav = HorizonSave.FromFolder(saveDir);
@@ -65,6 +74,7 @@ public static class Dump
         Program.WriteJson(Path.Combine(outDir, "summary.json"), new
         {
             revisionIndex = sav.Main.Info.GetKnownRevisionIndex(),
+            mainOffsets = MainOffsets(sav.Main.Offsets),
             files,
             players = sav.Players.Select(p => PlayerDump(p, s)).ToArray(),
         });

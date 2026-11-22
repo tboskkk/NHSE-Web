@@ -53,3 +53,12 @@ test("remake and recipe lookups", () => {
   expect(recipeItem(Number(recipeId))).toBe(itemId as number);
   expect(recipeItem(99999)).toBeUndefined();
 });
+
+test("every revision carries main save offsets; item acre width is 9 from 3.0.0", () => {
+  for (const r of REVISIONS) {
+    const o = r.mainOffsets;
+    for (const k of ["fieldItem", "landMakingMap", "mainFieldStructure", "outsideField", "fieldItemAcreWidth"] as const)
+      expect(typeof o[k]).toBe("number");
+    expect(o.fieldItemAcreWidth).toBe(r.index >= 31 ? 9 : 7);
+  }
+});
