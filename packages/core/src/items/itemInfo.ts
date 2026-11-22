@@ -53,3 +53,4 @@ export const recipeItem = (recipeId: number): number | undefined => recipes[Stri
 
 export const fieldItemName = (id: number): string | undefined => fieldItems[String(id)]?.name;
 export const flowerGeneNames = itemData.flowerGeneNames as Record<string, number>;
+export const recipeIds: number[] = Object.keys(recipes).map(Number).sort((a, b) => a - b);
