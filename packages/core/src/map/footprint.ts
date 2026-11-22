@@ -1,6 +1,6 @@
 import items from "../generated/items.json";
 
-const tables = items as unknown as { itemSizes: number[]; itemSizeTypes: { w: number; h: number }[] };
+const tables = items as unknown as { itemSizes: number[]; itemSizeTypes: { w: number; h: number }[]; fieldItems: Record<string, unknown> };
 
 export const NONE_RAW = 0xfffen;
 export const EXTENSION_ID = 0xfffd;
@@ -17,7 +17,8 @@ export function itemFootprint(raw: bigint): { w: number; h: number; unknownSize:
   const id = isExtension(raw) ? Number((raw >> 32n) & 0xffffn) : idOf(raw);
   const buriedOrDropped = (sp & 0x04) !== 0 || (sp & 0x20) !== 0;
   const lookup = buriedOrDropped ? 4 /* S_1_0x1_0 */ : (tables.itemSizes[id] ?? 255);
-  const unknownSize = !buriedOrDropped && id >= tables.itemSizes.length;
+  // Field items (trees, bushes, weeds, ...) sit past the size table; the real save stores them as 2x2 tiles (extension offsets max (1,1)).
+  const unknownSize = !buriedOrDropped && id >= tables.itemSizes.length && tables.fieldItems[id] === undefined;
   const t = tables.itemSizeTypes[lookup];
   let w = t?.w ?? 2;
   let h = t?.h ?? 2;

@@ -1,16 +1,8 @@
 /** Terrain colors (0xRRGGBB). One table so the look is easy to tweak. Unit model ranges mirror upstream TerrainUnitModel. */
-export type UnitClass = "base" | "river" | "cliff" | "fall" | "road" | "other";
+import { classifyUnit } from "@nhse/core";
+export { classifyUnit, type UnitClass } from "@nhse/core";
 
 export const OCEAN_RGBA = [0x80, 0xd7, 0xc3, 0xff] as const; // upstream TerrainSprite.ColorOcean
-
-export function classifyUnit(m: number): UnitClass {
-  if (m === 0) return "base";
-  if (m >= 0x01 && m <= 0x15) return "river";
-  if ((m >= 0x16 && m <= 0x29) || m === 0x93) return "cliff";
-  if ((m >= 0x3a && m <= 0x46) || (m >= 0x71 && m <= 0x92)) return "fall";
-  if ((m >= 0x47 && m <= 0x70) || m >= 0x94) return "road";
-  return "other";
-}
 
 export const PALETTE = {
   grass: [70, 120, 64],
