@@ -140,7 +140,7 @@ public static class ExportData
                 body[id] = Enumerable.Range(0, ItemRemakeInfo.BodyColorCountMax).Select(i => info.HasBodyColor(i) ? info.GetBodyDescription(i, s) : "").ToArray();
                 fabric[id] = Enumerable.Range(0, ItemRemakeInfo.BodyColorCountMax).Select(i => info.HasFabricColor(i) ? info.GetFabricDescription(i, s) : "").ToArray();
             }
-            Program.WriteJson(Path.Combine(outDir, "lang", $"{lang}.json"), new { items = s.itemlistdisplay, remakeBody = body, remakeFabric = fabric });
+            Program.WriteJson(Path.Combine(outDir, "lang", $"{lang}.json"), new { noneName = s.itemlist[0], items = s.itemlistdisplay, remakeBody = body, remakeFabric = fabric });
         }
     }
 }
