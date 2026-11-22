@@ -1,0 +1,5 @@
+{
+  "extends": "../tsconfig.base.json",
+  "compilerOptions": { "noEmit": true, "types": ["bun", "vite/client", "svelte"], "lib": ["ES2022", "DOM", "WebWorker"] },
+  "include": ["src"]
+}
