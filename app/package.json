@@ -11,7 +11,8 @@
   },
   "dependencies": {
     "@nhse/core": "workspace:*",
-    "@nhse/io": "workspace:*"
+    "@nhse/io": "workspace:*",
+    "pixi.js": "8.23.0"
   },
   "devDependencies": {
     "@sveltejs/vite-plugin-svelte": "^5.0.0",
