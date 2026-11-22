@@ -1,30 +1,26 @@
-# Handoff — NHSE-Web foundation (paused before Task 7)
+# Handoff — NHSE-Web foundation (all 14 tasks done)
 
 **Branch:** `feat/foundation` · **Plan:** `docs/superpowers/plans/2026-11-22-nhse-web-foundation.md` · **Spec:** `docs/superpowers/specs/2026-11-22-nhse-web-foundation-design.md`
-**Executing:** inline via `superpowers:executing-plans`. Ledger (git-ignored, authoritative): `.superpowers/sdd/2026-11-22-nhse-web-foundation/progress.md` — tasks 1–6 are `complete`; resume at **Task 7**. If the ledger is gone, trust `git log`.
 
-## Resume
+## State
+- Tasks 1–14 complete. Final whole-branch review done; its Critical/Important findings are fixed (commit "Fix in-place save dirty tracking…").
+- Task 14 (real game): the owner saved in place, imported into the ACNH PC Recomp, and the edits showed up with no corruption.
+- Not yet done: merge/PR of `feat/foundation` (needs the owner's go-ahead), pinning GitHub Actions to commit SHAs, and the deferred minors (listed in the ledger `.superpowers/sdd/2026-11-22-nhse-web-foundation/progress.md`, git-ignored).
+
+## Resume commands
 ```
-export DOTNET_ROOT=~/.dotnet PATH=~/.dotnet:$PATH      # .NET 10 SDK lives in ~/.dotnet (reference CLI only)
-git submodule update --init                            # vendor/NHSE pinned at cb074541…
-bun install
-NHSE_TEST_SAVE=$PWD/example-save-file bun test         # 49 tests, all pass (golden tests skip without the env var)
-dotnet build reference -c Release                      # golden tests use `dotnet run --no-build`, so build first
-S=~/.claude/plugins/cache/superpowers-marketplace/superpowers/6.4.2/skills/executing-plans/scripts
-$S/task-start docs/superpowers/plans/2026-11-22-nhse-web-foundation.md 7
+export DOTNET_ROOT=~/.dotnet PATH=~/.dotnet:$PATH
+git submodule update --init && bun install
+dotnet build reference -c Release
+NHSE_TEST_SAVE=$PWD/example-save-file bun test        # 79 tests
+NHSE_TEST_SAVE=$PWD/example-save-file bunx playwright test   # E2E round trip
+bun run typecheck
 ```
 `example-save-file/` is git-ignored (personal IDs) — never commit it.
 
-## State
-- Done: reference C# CLI · crypto + bytes · generated data (revisions/items/9 languages/sprites) · HorizonSave load/hash/save/verify · Personal/Item/GameStrings · EditSession.
-- Verified byte-identical vs upstream NHSE.Core: decrypt, hash regions, same-seed re-encrypt, every Personal field + item name.
-- Next: **Task 7** (`packages/core/src/edit/ops.ts` + implement `reference/Commands/Edit.cs`, golden edit tests), then 8 io, 9 worker API, 10–12 Svelte UI, 13 E2E/CI/Pages, 14 real-game acceptance. Then final whole-branch review.
-
-## Rulings & gotchas that later tasks depend on (full list in the ledger)
-- `HorizonSave.save(seed, only?, {encryptFn?})` hashes+encrypts only the emitted pairs; pair paths have no extension (`"main"`, `"Villager0/personal"`). `passthrough` holds non-pair files (landname.dat) — include them in the "save all" zip.
-- **Task 9 must call `session.markSaved()` after `build()`** (save-time hashing mutates pair data). `EditSession<T>.apply(label, fn(target))` rolls back if fn throws.
-- `EditSession` is constructed from anything with `pairs()`; golden/unit tests use stubs.
-- Naming (NHSE): `"pocket"` = slots 1–20 (Pockets2), `"bag"` = slots 21–40 (Pockets1); `slotCount()` = physical slots (20/20/9000), `pocketCount/bagCount/itemChestCount` = unlocked counters.
-- Item `raw` strings everywhere = u64 as lowercase 16-digit hex (`Item.NONE` = `"000000000000fffe"`).
-- items.json extras (my additions): `kindGroups`, `fieldItems`, `menuIconFiles`; remake = `{body:int[], fabric:int[]}` valid variant indices; lang JSON has `noneName` (empty-slot name = `itemlist[0]`).
-- Example save is 3.0.3: player "Tyler", town "Home", wallet 38003, itemChestCount 80 unlocked of 9000.
+## Things later work depends on
+- Save pipeline: `HorizonSave.save(seed, only?)` hashes+encrypts only emitted pairs. Worker `build("changed")` = dirty pairs ∪ pairs that loaded with invalid hashes; it never resets the changed set. Call `api.commit()` only after an in-place write succeeds (zip downloads do not commit).
+- `EditSession.absorb()` folds save-time hash bytes into the undo shadow; `markSaved()` moves the baseline.
+- Edits go through `edit(op)` in `app/src/lib/state.svelte.ts` (`session.apply(describeOp(...), applyOp(...))` in the worker); saves are serialized (`exclusive()`), edits wait for an in-flight save.
+- Item `raw` = u64 as 16-digit lowercase hex; "pocket" = slots 1–20, "bag" = 21–40.
+- Unverified in a real browser: native folder picker, real drag/touch, Firefox. Playwright's preview needs `BASE_PATH` set for `vite preview` too when testing a sub-path.
