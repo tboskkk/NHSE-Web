@@ -13,3 +13,4 @@ export * from "./structures/item";
 export * from "./structures/date";
 export * from "./strings/gameStrings";
 export * from "./save/personal";
+export * from "./edit/session";
