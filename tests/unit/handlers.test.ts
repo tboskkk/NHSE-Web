@@ -34,11 +34,12 @@ goldenTest("edit then undo restores the wallet; player view carries item names",
   expect(typeof pv.pocket[0]!.name).toBe("string");
 });
 
-goldenTest("build('changed') returns only the touched pair, then nothing after markSaved", async () => {
+goldenTest("build('changed') returns only the touched pair, then nothing after commit()", async () => {
   const { api } = await fresh();
   await api.edit({ op: "wallet", player: 0, value: 777 });
   const out = await api.build("changed");
   expect([...out.keys()].sort()).toEqual(["Villager0/personal.dat", "Villager0/personalHeader.dat"]);
+  await api.commit();
   expect((await api.build("changed")).size).toBe(0);
 });
 
@@ -63,4 +64,53 @@ goldenTest("itemCatalog excludes (None) and empty names", async () => {
   expect(cat.length).toBeGreaterThan(1000);
   expect(cat.some((c) => c.name === "(None)" || c.name === "")).toBe(false);
   expect(cat.find((c) => c.id === 8574)?.name).toBe("golden shovel");
+});
+
+// ---- Final-review fixes ----
+import { HorizonSave } from "../../packages/core/src/save/horizonSave";
+import { encrypt } from "../../packages/core/src/crypto/encryption";
+
+goldenTest("a zip build does not reset the in-place dirty set, and nothing resets until commit()", async () => {
+  const { api } = await fresh();
+  await api.edit({ op: "wallet", player: 0, value: 777 });
+  await api.build("all"); // e.g. Save as zip
+  expect([...(await api.build("changed")).keys()].sort()).toEqual(["Villager0/personal.dat", "Villager0/personalHeader.dat"]);
+  expect((await api.build("changed")).size).toBe(2); // write "failed": still pending
+  await api.commit(); // write succeeded
+  expect((await api.build("changed")).size).toBe(0);
+});
+
+goldenTest("pairs with invalid hashes at load are rebuilt by an in-place save even if untouched", async () => {
+  const clean = await HorizonSave.load(readDir(SAVE!));
+  const region = clean.main.revision.hash["main.dat"]!.regions[0]!;
+  const data = clean.main.data.slice();
+  data[region.start + 4]! ^= 1;
+  const enc = await encrypt(data, 7, clean.main.header);
+  const corrupted = readDir(SAVE!);
+  corrupted.set("main.dat", enc.data);
+  corrupted.set("mainHeader.dat", enc.header);
+  const api = createApi(fetcher);
+  const res = await api.load(corrupted, "en");
+  expect(res.invalidHashes.length).toBeGreaterThan(0);
+  const out = await api.build("changed");
+  expect(out.has("main.dat")).toBe(true);
+  await api.commit();
+  expect((await api.build("changed")).size).toBe(0);
+});
+
+goldenTest("a failed load leaves the previous save and its originals intact", async () => {
+  const { api, input } = await fresh();
+  await expect(api.load(new Map([["junk.txt", new Uint8Array(3)]]), "en")).rejects.toThrow();
+  const orig = await api.originals();
+  expect([...orig.keys()].sort()).toEqual([...input.keys()].sort());
+  expect((await api.player(0)).wallet).toBeGreaterThan(0);
+});
+
+goldenTest("summary() reflects renames", async () => {
+  const { api } = await fresh();
+  await api.edit({ op: "playerName", player: 0, value: "Zed" });
+  await api.edit({ op: "townName", value: "Newtown" });
+  const s = await api.summary();
+  expect(s.players[0]!.name).toBe("Zed");
+  expect(s.island).toBe("Newtown");
 });

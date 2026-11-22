@@ -39,8 +39,16 @@ export interface Api {
   edit(op: EditOp): Promise<{ change: string | null; history: string[] }>;
   undo(): Promise<string | null>;
   redo(): Promise<string | null>;
-  /** Runs save() with a crypto.getRandomValues seed, then markSaved(). "all" also includes passthrough files. */
+  /**
+   * Runs save() with a crypto.getRandomValues seed. "changed" = pairs edited since the last commit() plus any
+   * pairs that loaded with invalid hashes; "all" also includes passthrough files. Never resets the changed set:
+   * call commit() only after the files were durably written (a zip download does not count).
+   */
   build(mode: "changed" | "all"): Promise<SaveFiles>;
+  /** Declares the current bytes written to the destination folder: resets the changed set. */
+  commit(): Promise<void>;
+  /** Island and player names as currently stored (they change with renames). */
+  summary(): Promise<Pick<LoadResult, "island" | "players">>;
   originals(): Promise<SaveFiles>;
   itemCatalog(lang: string): Promise<CatalogEntry[]>;
 }

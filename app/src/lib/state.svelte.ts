@@ -56,7 +56,9 @@ async function load(getFiles: () => Promise<{ files: Map<string, Uint8Array>; fo
     app.rev++;
   } catch (e) {
     if (e instanceof DOMException && e.name === "AbortError") return; // picker cancelled
-    app.error = e instanceof SaveLoadError ? e.detail : e instanceof Error ? e.message.replace(/^[a-z-]+: /, "") : String(e);
+    const msg = e instanceof SaveLoadError ? e.detail : e instanceof Error ? e.message.replace(/^[a-z-]+: /, "") : String(e);
+    if (app.loaded) showToast(`Could not open that save: ${msg} (your open save is unchanged)`);
+    else app.error = msg;
   } finally {
     app.busy = false;
   }
@@ -66,12 +68,22 @@ export const openFolder = () => load(async () => pickFolder().then((r) => ({ fil
 export const openFiles = (files: FileList | File[]) => load(async () => ({ files: await fromFileList(files) }));
 export const openDrop = (dt: DataTransfer) => load(async () => ({ files: await fromDataTransfer(dt) }));
 
+/** The in-flight save, if any. Saves never overlap, and edits wait for it so a save sees a stable snapshot. */
+let saving: Promise<void> | null = null;
+
+async function refreshSummary() {
+  const s = await api.summary();
+  if (app.loaded) app.loaded = { ...app.loaded, island: s.island, players: s.players };
+}
+
 /** Applies an edit op through the worker; the single entry point for UI edits. */
 export async function edit(op: EditOp) {
+  await saving;
   try {
     const r = await api.edit(op);
     app.history = r.history;
     app.redoable = 0;
+    await refreshSummary();
     app.rev++;
     return r.change;
   } catch (e) {
@@ -81,45 +93,65 @@ export async function edit(op: EditOp) {
 }
 
 export async function undo() {
+  await saving;
   if (!app.history.length) return;
   if (await api.undo()) {
     app.history = app.history.slice(0, -1);
     app.redoable++;
+    await refreshSummary();
     app.rev++;
   }
 }
 
 export async function redo() {
+  await saving;
   const label = await api.redo();
   if (label) {
     app.history = [...app.history, label];
     app.redoable = Math.max(0, app.redoable - 1);
+    await refreshSummary();
     app.rev++;
   }
 }
 
-export async function saveInPlace() {
-  if (!app.loaded || !app.folder) return;
-  try {
-    if (!app.backedUp) {
-      downloadBytes(toZip(await api.originals(), app.loaded.island), backupName(app.loaded.island, new Date()));
-      app.backedUp = true;
-    }
-    const files = await api.build("changed");
-    await writeFiles(app.folder, files);
-    showToast(files.size === 0 ? "Nothing to save" : `Saved ${files.size} files`);
-  } catch (e) {
-    showToast(`Save failed: ${e instanceof Error ? e.message : String(e)}`);
-  }
+/** Runs one save at a time (key repeat, double clicks); a request while one is running is ignored. */
+function exclusive(fn: () => Promise<void>): Promise<void> {
+  if (saving) return saving;
+  app.busy = true;
+  const run = fn().finally(() => {
+    saving = null;
+    app.busy = false;
+  });
+  saving = run;
+  return run;
 }
 
-export async function saveZip() {
-  if (!app.loaded) return;
-  try {
-    downloadBytes(toZip(await api.build("all"), app.loaded.island), saveZipName(app.loaded.island, new Date()));
-  } catch (e) {
-    showToast(`Save failed: ${e instanceof Error ? e.message : String(e)}`);
-  }
-}
+export const saveInPlace = () =>
+  exclusive(async () => {
+    if (!app.loaded || !app.folder) return;
+    try {
+      if (!app.backedUp) {
+        downloadBytes(toZip(await api.originals(), app.loaded.island), backupName(app.loaded.island, new Date()));
+        app.backedUp = true;
+      }
+      const files = await api.build("changed");
+      await writeFiles(app.folder, files);
+      await api.commit(); // only after every file is written: a failed write stays pending for the retry
+      showToast(files.size === 0 ? "Nothing to save" : `Saved ${files.size} files`);
+    } catch (e) {
+      showToast(`Save failed: ${e instanceof Error ? e.message : String(e)}`);
+    }
+  });
+
+export const saveZip = () =>
+  exclusive(async () => {
+    if (!app.loaded) return;
+    try {
+      // A zip download is not an in-place write, so it does not reset the changed set.
+      downloadBytes(toZip(await api.build("all"), app.loaded.island), saveZipName(app.loaded.island, new Date()));
+    } catch (e) {
+      showToast(`Save failed: ${e instanceof Error ? e.message : String(e)}`);
+    }
+  });
 
 export const save = () => (canSaveInPlace() ? saveInPlace() : saveZip());

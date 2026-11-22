@@ -82,6 +82,14 @@ export class EditSession<T extends SessionTarget = SessionTarget> {
     this.resync();
   }
 
+  /**
+   * Folds bytes changed outside apply() (save-time hash fixes) into the undo shadow only,
+   * leaving the saved baseline alone: they are not user edits, and nothing is "saved" yet.
+   */
+  absorb(): void {
+    this.shadow = new Map([...this.pairs].map(([p, d]) => [p, d.slice()]));
+  }
+
   private resync(): void {
     this.shadow = new Map([...this.pairs].map(([p, d]) => [p, d.slice()]));
     this.baseline = new Map([...this.pairs].map(([p, d]) => [p, d.slice()]));

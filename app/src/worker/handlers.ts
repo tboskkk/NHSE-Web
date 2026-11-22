@@ -12,6 +12,8 @@ export function createApi(fetcher: (path: string) => Promise<unknown>): Api {
   let session: EditSession<HorizonSave> | null = null;
   let strings: GameStrings | null = null;
   let original: SaveFiles = new Map();
+  /** Pairs whose hashes were already invalid at load: rebuilt by the next in-place save even if untouched. */
+  let forced = new Set<string>();
   const langs = new Map<string, Promise<GameStrings>>();
 
   const loadStrings = (lang: string) => {
@@ -23,6 +25,11 @@ export function createApi(fetcher: (path: string) => Promise<unknown>): Api {
     if (!save || !session || !strings) throw new Error("No save is loaded.");
     return { save, session, strings };
   };
+
+  const summarize = (sav: HorizonSave) => ({
+    island: sav.players[0]?.personal.townName ?? "",
+    players: sav.players.map((p, index) => ({ index, name: p.personal.playerName, directory: p.directory })),
+  });
 
   const itemView = (it: Item, s: GameStrings): ItemView => ({
     raw: hex16(it.raw),
@@ -37,16 +44,16 @@ export function createApi(fetcher: (path: string) => Promise<unknown>): Api {
   return {
     async load(files, lang) {
       const s = await loadStrings(lang);
-      original = clone(files);
-      const sav = await HorizonSave.load(files);
+      const backup = clone(files);
+      const sav = await HorizonSave.load(files); // throws before any state below is replaced
+      original = backup;
+      forced = new Set(sav.invalidHashes().map((h) => h.path));
       save = sav;
       strings = s;
       session = new EditSession(sav);
-      const first = sav.players[0]?.personal;
       return {
-        island: first?.townName ?? "",
+        ...summarize(sav),
         revisionLabel: sav.revision.label,
-        players: sav.players.map((p, index) => ({ index, name: p.personal.playerName, directory: p.directory })),
         invalidHashes: sav.invalidHashes().map((h) => ({ path: h.path, start: h.region.start })),
       };
     },
@@ -96,13 +103,22 @@ export function createApi(fetcher: (path: string) => Promise<unknown>): Api {
 
     async build(mode) {
       const { save, session } = need();
-      const only = mode === "changed" ? session.dirtyPairs() : undefined;
+      const only = mode === "changed" ? new Set([...session.dirtyPairs(), ...forced]) : undefined;
       if (only && only.size === 0) return new Map();
       const seed = crypto.getRandomValues(new Uint32Array(1))[0]!;
       const out = await save.save(seed, only);
-      session.markSaved(); // save-time hashing mutated pair data; never record that as a user edit
+      session.absorb(); // save-time hashing mutated pair data; never record that as a user edit
       if (mode === "all") for (const [k, v] of save.passthrough) out.set(k, v.slice());
       return out;
+    },
+
+    async commit() {
+      need().session.markSaved();
+      forced = new Set();
+    },
+
+    async summary() {
+      return summarize(need().save);
     },
 
     async originals() {

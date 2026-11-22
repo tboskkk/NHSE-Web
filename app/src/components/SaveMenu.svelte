@@ -1,11 +1,11 @@
 <script lang="ts">
-  import { canSaveInPlace, saveInPlace, saveZip } from "../lib/state.svelte";
+  import { app, canSaveInPlace, saveInPlace, saveZip } from "../lib/state.svelte";
   let open = $state(false);
   const run = (fn: () => void) => () => { open = false; fn(); };
 </script>
 
 <div class="wrap">
-  <button class="primary" aria-haspopup="menu" aria-expanded={open} onclick={() => (open = !open)}>Save ▾</button>
+  <button class="primary" disabled={app.busy} aria-haspopup="menu" aria-expanded={open} onclick={() => (open = !open)}>Save ▾</button>
   {#if open}
     <div class="menu" role="menu">
       {#if canSaveInPlace()}
