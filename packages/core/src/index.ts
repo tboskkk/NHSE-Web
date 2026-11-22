@@ -15,3 +15,4 @@ export * from "./strings/gameStrings";
 export * from "./save/personal";
 export * from "./edit/session";
 export * from "./edit/ops";
+export * from "./map/mapData";
