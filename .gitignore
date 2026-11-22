@@ -1,0 +1,7 @@
+example-save-file/
+node_modules/
+dist/
+.DS_Store
+*.local
+reference/bin/
+reference/obj/
