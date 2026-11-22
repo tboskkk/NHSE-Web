@@ -4,6 +4,10 @@ A browser-based save editor for **Animal Crossing: New Horizons** — a TypeScri
 logic of [NHSE](https://github.com/kwsch/NHSE) with a modern web UI. Works on Linux, macOS and Windows; handles
 Switch saves and ACNH PC Recomp saves. **Your save never leaves your computer.**
 
+## 👉 Use it now: **https://tboskkk.github.io/NHSE-Web/**
+No install needed. Open the page, pick your save folder (or drop a `.zip`), edit, and save. Chrome, Edge and Brave can
+write changes straight back into the folder; Firefox and Safari download a zip instead.
+
 > ⚠️ Always keep a backup of your save. The app offers to download one before its first in-place write.
 
 ## Using it
