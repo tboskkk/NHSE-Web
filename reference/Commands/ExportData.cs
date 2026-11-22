@@ -77,10 +77,29 @@ public static class ExportData
     static string[] KindNames(Func<ItemKind, bool> pred) =>
         Enum.GetValues<ItemKind>().Where(pred).Select(k => k.ToString()).ToArray();
 
+    /// <summary>Per-acre 16x16 tile class bytes (outside.bin) plus upstream's resulting colors, for oracle comparison.</summary>
+    static void WriteAcreTemplates(string outDir)
+    {
+        const int count = (int)OutsideAcre.FldOutNGardenRFront00 + 1;
+        var classes = new byte[count * 256];
+        var colors = new int?[count * 256];
+        for (int acre = 0; acre < count; acre++)
+        for (int y = 0; y < 16; y++)
+        for (int x = 0; x < 16; x++)
+        {
+            classes[(acre * 256) + (y * 16) + x] = AcreTileColor.AcreTiles[(acre * 32 * 32 * 4) + (4 * ((y * 64) + x))];
+            var c = AcreTileColor.GetAcreTileColor((ushort)acre, x, y);
+            colors[(acre * 256) + (y * 16) + x] = c == -0x1000000 ? null : c; // opaque black = dynamic (terrain-based)
+        }
+        File.WriteAllBytes(Path.Combine(outDir, "acretiles.bin"), classes);
+        Program.WriteJson(Path.Combine(outDir, "acrecolors.json"), colors);
+    }
+
     public static void Run(string outDir)
     {
         Directory.CreateDirectory(outDir);
         Program.WriteJson(Path.Combine(outDir, "revisions.json"), Revisions());
+        WriteAcreTemplates(outDir);
 
         var en = new GameStrings("en");
         int n = en.itemlistdisplay.Length;

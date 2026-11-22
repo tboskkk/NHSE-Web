@@ -21,6 +21,7 @@ try {
   mkdirSync(join(sprites, "menuicon"), { recursive: true });
 
   copyFileSync(join(tmp, "revisions.json"), join(gen, "revisions.json"));
+  copyFileSync(join(tmp, "acretiles.bin"), join(lang, "..", "acretiles.bin"));
 
   const srcIcons = join(root, "vendor/NHSE/NHSE.Sprites/Resources/MenuIcon");
   const srcMisc = join(root, "vendor/NHSE/NHSE.Sprites/Resources/Misc");
