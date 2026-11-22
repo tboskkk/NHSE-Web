@@ -1,13 +1,11 @@
-# Handoff — NHSE-Web (foundation shipped; map viewer P1 in progress on branch `map-viewer`)
+# Handoff — NHSE-Web (foundation shipped; map viewer P1 complete on branch `map-viewer`, pending merge decision)
 
 **Repo:** https://github.com/tboskkk/NHSE-Web (public) · **Live app:** https://tboskkk.github.io/NHSE-Web/ · **Branch:** `main` only (feature branches merged and deleted)
 **Plan/spec (done):** `docs/superpowers/plans/2026-11-22-nhse-web-foundation.md`, `docs/superpowers/specs/2026-11-22-nhse-web-foundation-design.md`
 
 ## State
 - **main**: foundation complete (see below), 81 tests at that point.
-- **Branch `map-viewer`** (10 commits, NOT merged, NOT pushed; ask before pushing): map viewer P1, plan tasks 1-10 of 12 done, 130 tests passing with `NHSE_TEST_SAVE`. Spec `docs/superpowers/specs/2026-11-22-map-viewer-design.md`, plan `docs/superpowers/plans/2026-11-22-map-viewer.md`.
-- **Remaining:** Task 11 (Playwright e2e `tests/e2e/map.spec.ts`: load zip, open Map, wait `[data-testid=map-host][data-ready=true]`, assert non-blank canvas pixels, hover shows inspector, toggle Terrain changes pixels, sprite import status; headless Chromium WebGL2 works via `--use-gl=angle --use-angle=swiftshader --enable-unsafe-swiftshader --ignore-gpu-blocklist`, may need adding to `playwright.config.ts` launchOptions), Task 12 (README + this handoff + `.gitignore` `personal-sprites/`), then final whole-branch review (`superpowers:executing-plans` Final Review; scripts in the superpowers plugin dir `skills/subagent-driven-development/scripts/review-package`), fix pass, and `superpowers:finishing-a-development-branch`.
-- The executing-plans ledger is git-ignored scratch at `.superpowers/sdd/2026-11-22-map-viewer/progress.md` (task completion lines + every `Ruling:`); if it is gone, trust `git log main..map-viewer`.
+- **Branch `map-viewer`** (NOT merged, NOT pushed; ask before pushing): map viewer P1, all 12 plan tasks done, 130 unit tests + 2 Playwright e2e (round trip, map) passing with `NHSE_TEST_SAVE`. Spec `docs/superpowers/specs/2026-11-22-map-viewer-design.md`, plan `docs/superpowers/plans/2026-11-22-map-viewer.md`. Headless Chromium has WebGL2 without extra flags. Remaining: final review, fix pass, merge decision.
 - **Spike S (personal sprite pipeline) not started**: decode a model from `~/Games/ACNH/romfs` (zstd `.zs`, BFRES) and render a top-down/iso PNG named `NNNNN_V.png` into git-ignored `personal-sprites/`; import via the Map page. Never commit Nintendo art. Time-boxed, no product code.
 
 ## Resume commands
@@ -33,7 +31,7 @@ bun run gen:data                                       # regenerates generated/*
 
 ## Known gaps / deferred (all minor)
 - Unverified in a real browser: native folder picker, real mouse/touch drag (map pinch/drag untested outside headless), Firefox.
-- Map: layer toggles and sprite import UI not yet exercised by an automated test (Task 11); item sprites re-resolve every visible tile on each camera change (fine at current counts; optimize if slow).
+- Map: sprite import UI and real sprite rendering not covered by e2e (only layer toggle, hover, canvas pixels are); item sprites re-resolve every visible tile on each camera change (fine at current counts; optimize if slow).
 - ItemPicker draft resets on any refetch; redo button state vs worker redo stack can disagree after a no-op edit; ProfileCard calls `api.itemCatalog` instead of cached `loadCatalog`.
 - Names truncated at 10 UTF-16 units can leave a lone surrogate (matches upstream, pinned by a test).
 - Hash warning is a dismissible banner; spec says warn before allowing edits.

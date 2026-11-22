@@ -28,7 +28,14 @@ Everything runs in your browser (a Web Worker holds the save). No save data is s
 
 ## Status
 Foundation: loading, verified saving, undo/redo, and the player editor (profile, money, pockets, bag, storage).
-Villagers, map, and collections are planned (see `docs/superpowers/specs` and `docs/superpowers/plans`).
+Map: a read-only island viewer (terrain, items, buildings, inspector, layer toggles; pan/zoom with mouse, touch or keys).
+Item icons need a sprite pack you import yourself (see below). Map editing, villagers, and collections are planned (see `docs/superpowers/specs` and `docs/superpowers/plans`).
+
+## Map sprites
+No Nintendo art is shipped or committed. The map draws terrain and building labels on its own; item icons appear only
+after you import your own pack on the Map page (**Import folder** or **Import .zip**): PNG files named `NNNNN_V.png`
+(item id, variant). The pack is stored in your browser (IndexedDB) and never uploaded. Keep personal packs in the
+git-ignored `personal-sprites/` folder.
 
 ## Development
 ```
