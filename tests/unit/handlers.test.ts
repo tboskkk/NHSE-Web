@@ -1,5 +1,6 @@
 import { expect } from "bun:test";
 import { createApi } from "../../app/src/worker/handlers";
+import { GameStrings } from "../../packages/core/src/strings/gameStrings";
 import { cloneFiles, goldenTest, readDir, SAVE } from "../golden/helpers";
 
 const fetcher = async (path: string) => JSON.parse(await Bun.file(new URL(`../../app/public/${path}`, import.meta.url).pathname).text());
@@ -113,4 +114,37 @@ goldenTest("summary() reflects renames", async () => {
   const s = await api.summary();
   expect(s.players[0]!.name).toBe("Zed");
   expect(s.island).toBe("Newtown");
+});
+
+goldenTest("map() throws before a save is loaded", async () => {
+  const api = createApi(fetcher);
+  await expect(api.map()).rejects.toThrow("No save is loaded.");
+});
+
+goldenTest("map() returns the example island's layers", async () => {
+  const { api } = await fresh();
+  const m = await api.map();
+  expect(m.revisionLabel).toBe("3.0.3");
+  expect([m.terrain.width, m.terrain.height]).toEqual([112, 96]);
+  expect([m.items[0].width, m.items[0].height]).toEqual([288, 192]);
+  expect(m.items[1].raw.length).toBe(288 * 192);
+  expect(m.buildings.length).toBe(46);
+});
+
+goldenTest("map() returns independent buffers and leaves the save clean (read-only)", async () => {
+  const { api } = await fresh();
+  const a = await api.map();
+  const b = await api.map();
+  expect(a.terrain.elevation.buffer).not.toBe(b.terrain.elevation.buffer);
+  a.terrain.elevation[0] = 999; // mutating a returned copy must not change the save
+  expect((await api.map()).terrain.elevation[0]).toBe(b.terrain.elevation[0]);
+  expect((await api.build("changed")).size).toBe(0);
+});
+
+goldenTest("itemName resolves a raw hex value; unknown ids do not throw", async () => {
+  const { api } = await fresh();
+  const none = (await GameStrings.load("en", fetcher)).noneName;
+  expect(await api.itemName("000000000000fffe")).toBe(none);
+  expect(typeof (await api.itemName("000000000000ffff"))).toBe("string");
+  expect(typeof (await api.itemName("00000000fffffff0"))).toBe("string");
 });

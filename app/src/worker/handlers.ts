@@ -1,5 +1,5 @@
 import {
-  applyOp, describeOp, EditSession, GameStrings, getKind, getMenuIconSprite, HorizonSave, Item,
+  applyOp, describeOp, EditSession, GameStrings, getKind, getMenuIconSprite, HorizonSave, Item, readMap,
   type ItemArea, type SaveFiles,
 } from "@nhse/core";
 import type { Api, ItemView, PlayerView } from "./protocol";
@@ -123,6 +123,16 @@ export function createApi(fetcher: (path: string) => Promise<unknown>): Api {
 
     async originals() {
       return clone(original);
+    },
+
+    async map() {
+      const { save } = need();
+      return { ...readMap(save.main.data, save.revision), revisionLabel: save.revision.label };
+    },
+
+    async itemName(raw) {
+      const { strings } = need();
+      return strings.getItemName(new Item(BigInt(`0x${raw}`)));
     },
 
     async itemCatalog(lang) {

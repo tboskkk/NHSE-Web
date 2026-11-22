@@ -1,4 +1,4 @@
-import type { EditOp, SaveFiles } from "@nhse/core";
+import type { EditOp, MapData, SaveFiles } from "@nhse/core";
 
 export type LoadResult = {
   island: string;
@@ -31,6 +31,8 @@ export type PlayerView = {
   itemChest: ItemView[];
 };
 
+export type MapView = MapData & { revisionLabel: string };
+
 export type CatalogEntry = { id: number; name: string; kind: string; sprite: string };
 
 export interface Api {
@@ -51,6 +53,10 @@ export interface Api {
   summary(): Promise<Pick<LoadResult, "island" | "players">>;
   originals(): Promise<SaveFiles>;
   itemCatalog(lang: string): Promise<CatalogEntry[]>;
+  /** Read-only snapshot of the island map (fresh copies each call; never marks the save dirty). */
+  map(): Promise<MapView>;
+  /** Display name for a 16-digit hex raw item value in the loaded language. */
+  itemName(raw: string): Promise<string>;
 }
 
 export type Request = { id: number; method: keyof Api; args: unknown[] };
