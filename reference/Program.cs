@@ -16,7 +16,7 @@ public static class Program
     {
         if (args.Length == 0)
         {
-            Console.Error.WriteLine("usage: reference <vectors|dump|save|edit|export-data> ...");
+            Console.Error.WriteLine("usage: reference <vectors|dump|save|edit|export-data|map> ...");
             return 2;
         }
         try
@@ -27,6 +27,7 @@ public static class Program
                 case "dump": Dump.Run(args[1], args[2]); break;
                 case "save": SaveCmd.Run(args[1], uint.Parse(args[2]), args[3]); break;
                 case "edit": Edit.Run(args[1], args[2], uint.Parse(args[3]), args[4]); break;
+                case "map": MapDump.Run(args[1], args[2]); break;
                 case "export-data": ExportData.Run(args[1]); break;
                 default: Console.Error.WriteLine($"unknown command {args[0]}"); return 2;
             }
