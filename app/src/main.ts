@@ -1,5 +1,5 @@
-import { createClient } from "./lib/api";
+import { mount } from "svelte";
+import "./app.css";
+import App from "./App.svelte";
 
-// Placeholder entry (Task 10 replaces this with the Svelte app); referencing the client makes Vite emit the worker chunk.
-(window as unknown as { nhseApi: unknown }).nhseApi = createClient();
-document.getElementById("app")!.textContent = "NHSE Web";
+mount(App, { target: document.getElementById("app")! });
