@@ -1,38 +1,43 @@
-# Handoff — NHSE-Web (foundation shipped; next sub-project not started)
+# Handoff — NHSE-Web (foundation shipped; map viewer P1 in progress on branch `map-viewer`)
 
 **Repo:** https://github.com/tboskkk/NHSE-Web (public) · **Live app:** https://tboskkk.github.io/NHSE-Web/ · **Branch:** `main` only (feature branches merged and deleted)
 **Plan/spec (done):** `docs/superpowers/plans/2026-11-22-nhse-web-foundation.md`, `docs/superpowers/specs/2026-11-22-nhse-web-foundation-design.md`
 
 ## State
-- Foundation complete: load/verified save, undo/redo, player editor (profile, money, pockets, bag, storage, item picker). 81 unit+golden tests, Playwright zip round trip, CI green, Pages deploy green (separate build/deploy jobs, Actions pinned to SHAs).
-- Real-game acceptance passed: a save edited in the app (Save in place) imported into the ACNH PC Recomp with edits visible and no corruption.
-- Final whole-branch review done; all Critical/Important findings fixed.
+- **main**: foundation complete (see below), 81 tests at that point.
+- **Branch `map-viewer`** (10 commits, NOT merged, NOT pushed; ask before pushing): map viewer P1, plan tasks 1-10 of 12 done, 130 tests passing with `NHSE_TEST_SAVE`. Spec `docs/superpowers/specs/2026-11-22-map-viewer-design.md`, plan `docs/superpowers/plans/2026-11-22-map-viewer.md`.
+- **Remaining:** Task 11 (Playwright e2e `tests/e2e/map.spec.ts`: load zip, open Map, wait `[data-testid=map-host][data-ready=true]`, assert non-blank canvas pixels, hover shows inspector, toggle Terrain changes pixels, sprite import status; headless Chromium WebGL2 works via `--use-gl=angle --use-angle=swiftshader --enable-unsafe-swiftshader --ignore-gpu-blocklist`, may need adding to `playwright.config.ts` launchOptions), Task 12 (README + this handoff + `.gitignore` `personal-sprites/`), then final whole-branch review (`superpowers:executing-plans` Final Review; scripts in the superpowers plugin dir `skills/subagent-driven-development/scripts/review-package`), fix pass, and `superpowers:finishing-a-development-branch`.
+- The executing-plans ledger is git-ignored scratch at `.superpowers/sdd/2026-11-22-map-viewer/progress.md` (task completion lines + every `Ruling:`); if it is gone, trust `git log main..map-viewer`.
+- **Spike S (personal sprite pipeline) not started**: decode a model from `~/Games/ACNH/romfs` (zstd `.zs`, BFRES) and render a top-down/iso PNG named `NNNNN_V.png` into git-ignored `personal-sprites/`; import via the Map page. Never commit Nintendo art. Time-boxed, no product code.
 
 ## Resume commands
 ```
 export DOTNET_ROOT=~/.dotnet PATH=~/.dotnet:$PATH      # .NET 10 SDK in ~/.dotnet (reference CLI only)
-git submodule update --init && bun install
+git checkout map-viewer && git submodule update --init && bun install
 dotnet build reference -c Release                      # golden tests use `dotnet run --no-build`
-NHSE_TEST_SAVE=$PWD/example-save-file bun test         # 81 pass
+NHSE_TEST_SAVE=$PWD/example-save-file bun test         # 130 pass on map-viewer
 NHSE_TEST_SAVE=$PWD/example-save-file bunx playwright test
-bun run typecheck
+bun run typecheck && bun run build
+bun run gen:data                                       # regenerates generated/*.json and app/public/data|sprites from the oracle
 ```
 `example-save-file/` is git-ignored (personal IDs): never commit it, never put it in a public artifact.
 
 ## Architecture facts later work depends on
-- Core (`packages/core`) is pure TS, verified byte-identical against upstream NHSE.Core through the C# oracle in `reference/` (golden tests; `reference/Commands/Edit.cs` mirrors the `EditOp` schema in `packages/core/src/edit/ops.ts`). New save structures should get an oracle command + golden test first.
+- Core (`packages/core`) is pure TS, verified byte-identical against upstream NHSE.Core through the C# oracle in `reference/` (golden tests; `reference/Commands/Edit.cs` mirrors `EditOp` in `packages/core/src/edit/ops.ts`; `reference/Commands/MapDump.cs` is the `map` command). New save structures get an oracle command + golden test first.
 - Save pipeline: `HorizonSave.save(seed, only?)` hashes+encrypts only emitted pairs; pair paths have no extension (`"main"`, `"Villager0/personal"`); `passthrough` holds non-pair files (landname.dat).
-- Worker API (`app/src/worker/handlers.ts`, protocol in `protocol.ts`): `build("changed")` = dirty pairs ∪ pairs that loaded with invalid hashes and never resets the changed set; call `api.commit()` only after an in-place write succeeds (zip downloads don't commit). `EditSession.absorb()` folds save-time hash bytes into the undo shadow; `markSaved()` moves the baseline.
-- UI edits go only through `edit(op)` in `app/src/lib/state.svelte.ts`; saves are serialized (`exclusive()`), edits wait for an in-flight save, Save waits for pending edits. `applyOp` validates ranges before touching bytes.
-- Item `raw` = u64 as 16-digit lowercase hex (`"000000000000fffe"` = none). `"pocket"` = slots 1–20, `"bag"` = 21–40, per-area slot numbering in labels.
-- Preview under a sub-path needs `BASE_PATH` on `vite preview` too. Don't run `pkill -f` patterns that match your own command line.
+- Worker API (`app/src/worker/handlers.ts`, `protocol.ts`): `build("changed")` = dirty pairs + pairs that loaded with invalid hashes and never resets the changed set; call `api.commit()` only after an in-place write succeeds. `EditSession.absorb()` folds save-time hash bytes into the undo shadow. `api.map()`/`api.itemName()` are read-only; worker results are transferred via `transferables()` (`app/src/worker/transfer.ts`).
+- UI edits go only through `edit(op)` in `app/src/lib/state.svelte.ts`; saves are serialized, edits wait for an in-flight save. `applyOp` validates ranges before touching bytes.
+- Item `raw` = u64 as 16-digit lowercase hex (`"000000000000fffe"` = none). `"pocket"` = slots 1-20, `"bag"` = 21-40.
+- **Map facts** (`packages/core/src/map/`, `app/src/map/`): per-revision offsets are `Revision.mainOffsets` (field item acres 7 wide before 3.0.0, 9 from 3.0.0, height 6). Terrain 112x96 tiles (14-byte tiles) and item layers (32 tiles/acre, 8-byte items) are **column-major** (`index = height*x + y`). World = 9x8 acres at 32 item-tile units/acre (288x256); terrain sits at world (32,32) with 2x2 item tiles per terrain tile; items at x=((9-acreW)/2)*32, y=32; buildings (46 x 0x14 bytes) and plaza are in world item-tile units; buildings drawn as 4x4 item tiles. Ocean/beach colors come from upstream acre templates (`app/public/data/acretiles.bin`, generated by `gen:data`; class 7 = dynamic palette). Item flag regions are treated as opaque raw bytes (upstream sizes/indexes them oddly), so P2 must define flag semantics before editing items. Sprite lookup: `id_count` -> `id_0` -> menu icon -> leaf, with field-item remap (`spriteItemId`). PixiJS 8.23.0 is a lazy chunk (`MapView`); packs live in IndexedDB only.
+- Preview under a sub-path needs `BASE_PATH` on `vite preview` too. Don't run `pkill -f` patterns that match your own command line (use `fuser -k PORT/tcp`).
 
 ## Known gaps / deferred (all minor)
-- Unverified in a real browser: native folder picker, real mouse/touch drag, Firefox.
-- ItemPicker draft resets on any refetch (e.g. a money edit); redo button state vs worker redo stack can disagree after a no-op edit; ProfileCard calls `api.itemCatalog` instead of cached `loadCatalog`.
+- Unverified in a real browser: native folder picker, real mouse/touch drag (map pinch/drag untested outside headless), Firefox.
+- Map: layer toggles and sprite import UI not yet exercised by an automated test (Task 11); item sprites re-resolve every visible tile on each camera change (fine at current counts; optimize if slow).
+- ItemPicker draft resets on any refetch; redo button state vs worker redo stack can disagree after a no-op edit; ProfileCard calls `api.itemCatalog` instead of cached `loadCatalog`.
 - Names truncated at 10 UTF-16 units can leave a lone surrogate (matches upstream, pinned by a test).
 - Hash warning is a dismissible banner; spec says warn before allowing edits.
 - The E2E test leaves a zip of the personal save in os.tmpdir(); an untracked git-ignored `test-results/` dir may exist.
 
 ## Next
-Spec roadmap sub-projects: **villagers**, **map/terrain editor** (the owner's main motivation: modern canvas editor with zoom/pan, brushes, undo, sprites), **collections**. Start with `superpowers:brainstorming` for the chosen one; reuse the oracle-first/golden-test approach.
+Finish map-viewer (Tasks 11-12 + final review + merge decision), then P2 map editor (brushes, undo, placement; own brainstorm), spike S in parallel, villagers/collections later.
