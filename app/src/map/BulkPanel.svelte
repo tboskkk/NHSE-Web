@@ -7,7 +7,8 @@
 
   let scope = $state<"0" | "1" | "both">("both");
   let from = $state<bigint | null>(null);
-  let pending = $state<{ req: PlanRequest; plan: PlanResult } | null>(null);
+  // raw: the plan holds an EditOp that is posted to the worker, and a $state proxy cannot be structured-cloned
+  let pending = $state.raw<{ req: PlanRequest; plan: PlanResult } | null>(null);
   let busy = $state(false);
 
   const hex = (r: bigint) => r.toString(16).padStart(16, "0");

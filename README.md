@@ -28,8 +28,18 @@ Everything runs in your browser (a Web Worker holds the save). No save data is s
 
 ## Status
 Foundation: loading, verified saving, undo/redo, and the player editor (profile, money, pockets, bag, storage).
-Map: a read-only island viewer (terrain, items, buildings, inspector, layer toggles; pan/zoom with mouse, touch or keys).
-Item icons need a sprite pack you import yourself (see below). Map editing, villagers, and collections are planned (see `docs/superpowers/specs` and `docs/superpowers/plans`).
+Map: an island viewer (terrain, items, buildings, inspector, layer toggles; pan/zoom with mouse, touch or keys) and an
+item editor (place, erase, fill/clear areas, pick, drag-paint, bulk weed removal / remove all / replace all, both item
+layers, undo/redo). Item icons need a sprite pack you import yourself (see below). Buildings, terrain editing, villagers,
+and collections are planned (see `docs/superpowers/specs` and `docs/superpowers/plans`).
+
+## Editing the map
+Open **Map → Edit**. Pick a brush item, a tool (Place `P`, Erase `E`, Fill area `R`, Clear area `C`, Pick `I`) and the item
+layer, then click or drag. Space or middle-drag pans. Edits are strict: an item is only placed where its whole footprint is
+inside the map, on buildable ground (not water or cliffs), clear of buildings, the plaza and other items on that layer;
+otherwise the ghost turns red and says why, and nothing is changed. Per-item game rules that NHSE does not encode (for
+example flowers only on grass) are not enforced. Every accepted edit is byte-identical to what upstream NHSE writes.
+One drag, fill or bulk action is one undo step. Item flag bytes are never modified (their layout is unconfirmed).
 
 ## Map sprites
 No Nintendo art is shipped or committed. The map draws terrain and building labels on its own; item icons appear only
