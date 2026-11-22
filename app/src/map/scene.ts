@@ -17,6 +17,7 @@ export type Ghost = { x: number; y: number; w: number; h: number; ok: boolean; l
 export interface MapScene {
   readonly layout: Layout;
   setLayerVisible(layer: LayerId, on: boolean): void;
+  setLayerAlpha(layer: LayerId, alpha: number): void;
   setSprites(src: SpriteSource): void;
   /** Re-reads the item layers after they were patched in place. */
   invalidateItems(): void;
@@ -177,6 +178,10 @@ export async function createMapScene(canvas: HTMLCanvasElement, map: MapData, op
     layout,
     setLayerVisible(layer, on) {
       layers[layer].visible = on;
+      schedule();
+    },
+    setLayerAlpha(layer, alpha) {
+      layers[layer].alpha = alpha;
       schedule();
     },
     setSprites(src) {

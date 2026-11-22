@@ -8,7 +8,7 @@
   import { screenToTile } from "./tiles";
 
   type Hover = { terrain: { x: number; y: number } | null; item: { x: number; y: number } | null } | null;
-  let { map, acreTiles, sprites, layers, version = 0, ghost = null, onhover, onerror }: {
+  let { map, acreTiles, sprites, layers, version = 0, ghost = null, dim = null, paint = null, onhover, onerror }: {
     map: MapData;
     acreTiles: Uint8Array;
     sprites: SpriteSource;
@@ -16,6 +16,10 @@
     /** Bumped after the item layers were patched in place. */
     version?: number;
     ghost?: Ghost | null;
+    /** An item layer drawn faded (the one that is not being edited). */
+    dim?: LayerId | null;
+    /** Edit-mode gesture sink; null in view mode. Left button / one finger paints, Space or middle button or two fingers pan. */
+    paint?: { start(t: { x: number; y: number }): void; move(t: { x: number; y: number }): void; end(): void; cancel(): void } | null;
     onhover: (h: Hover) => void;
     onerror: (message: string) => void;
   } = $props();
@@ -28,6 +32,8 @@
   let ready = $state(false);
   const pointers = new Map<number, { x: number; y: number }>();
   let pinch = 0;
+  let painting = false;
+  let spaceDown = false;
 
   const set = (c: Camera) => { camera = c; scene?.setCamera(c); };
   const fit = () => {
@@ -65,6 +71,7 @@
   $effect(() => { scene?.setSprites(sprites); });
   $effect(() => { void version; scene?.invalidateItems(); });
   $effect(() => { scene?.setGhost(ghost); });
+  $effect(() => { for (const id of ["items0", "items1"] as const) scene?.setLayerAlpha(id, dim === id ? 0.3 : 1); });
 
   const local = (e: { clientX: number; clientY: number }) => {
     const r = canvas.getBoundingClientRect();
@@ -79,16 +86,30 @@
     onhover(terrain || item ? { terrain, item } : null);
   }
 
+  const itemTileAt = (sx: number, sy: number) => (scene ? screenToTile(camera, sx, sy, scene.layout.items) : null);
+
   function onpointerdown(e: PointerEvent) {
     canvas.setPointerCapture(e.pointerId);
-    pointers.set(e.pointerId, local(e));
+    const p = local(e);
+    if (painting) { paint?.cancel(); painting = false; } // a second finger turns the gesture into pan/zoom
+    pointers.set(e.pointerId, p);
     pinch = 0;
+    if (paint && pointers.size === 1 && e.button === 0 && !spaceDown) {
+      const t = itemTileAt(p.x, p.y);
+      if (t) { painting = true; paint.start(t); }
+    }
   }
   function onpointermove(e: PointerEvent) {
     const p = local(e);
     const prev = pointers.get(e.pointerId);
     if (!prev) { hoverAt(p.x, p.y); return; }
     pointers.set(e.pointerId, p);
+    if (painting) {
+      hoverAt(p.x, p.y);
+      const t = itemTileAt(p.x, p.y);
+      if (t) paint?.move(t);
+      return;
+    }
     if (pointers.size === 1) set(panBy(camera, p.x - prev.x, p.y - prev.y, WORLD_PX, view));
     else if (pointers.size === 2) {
       const [a, b] = [...pointers.values()];
@@ -97,13 +118,19 @@
       pinch = d;
     }
   }
-  function onpointerup(e: PointerEvent) { pointers.delete(e.pointerId); pinch = 0; }
+  function onpointerup(e: PointerEvent) {
+    if (painting) { painting = false; if (e.type === "pointerup") paint?.end(); else paint?.cancel(); }
+    pointers.delete(e.pointerId);
+    pinch = 0;
+  }
   function onwheel(e: WheelEvent) {
     e.preventDefault();
     const p = local(e);
     set(zoomAt(camera, Math.exp(-e.deltaY * 0.0015), p.x, p.y, WORLD_PX, view));
   }
+  function onkeyup(e: KeyboardEvent) { if (e.key === " ") spaceDown = false; }
   function onkeydown(e: KeyboardEvent) {
+    if (e.key === " ") { spaceDown = true; e.preventDefault(); return; }
     const step = 80;
     const k = e.key;
     if (k === "ArrowLeft") set(panBy(camera, step, 0, WORLD_PX, view));
@@ -125,7 +152,7 @@
     aria-label="Island map. Drag to pan, scroll or use plus and minus to zoom, arrow keys to move."
     tabindex="0"
     {onpointerdown} {onpointermove} {onpointerup} onpointercancel={onpointerup} onpointerleave={() => onhover(null)}
-    {onwheel} {onkeydown}
+    {onwheel} {onkeydown} {onkeyup}
   ></canvas>
 </div>
 

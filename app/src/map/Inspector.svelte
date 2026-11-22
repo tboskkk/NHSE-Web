@@ -47,7 +47,7 @@
 </aside>
 
 <style>
-  aside { width: 15rem; flex: none; background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); padding: 10px 12px; overflow-y: auto; }
+  aside { width: 100%; flex: none; background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); padding: 10px 12px; overflow-y: auto; }
   h2 { font-size: 0.72rem; text-transform: uppercase; letter-spacing: 0.06em; color: var(--muted); margin: 0 0 6px; }
   h3 { font-size: 0.9rem; margin: 10px 0 4px; }
   dl { display: grid; grid-template-columns: auto 1fr; gap: 2px 10px; margin: 0; }
