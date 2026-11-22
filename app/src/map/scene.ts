@@ -3,6 +3,7 @@ import type { MapData } from "@nhse/core";
 import { type Camera, clampCamera } from "./camera";
 import { BUILDING_TILES, makeLayout, PX_PER_ITEM_TILE, WORLD_PX, type Layout } from "./layout";
 import type { SpriteSource } from "./spriteSource";
+import { itemSpriteRect } from "./itemRect";
 import { renderTerrainRGBA } from "./terrainImage";
 import { OCEAN_RGBA } from "./terrainPalette";
 import { tileToWorld, visibleTileRange } from "./tiles";
@@ -11,10 +12,15 @@ export type LayerId = "terrain" | "items0" | "items1" | "buildings" | "grid";
 
 export type SceneOptions = { acreTiles: Uint8Array; sprites: SpriteSource; buildingName: (type: number) => string };
 
+export type Ghost = { x: number; y: number; w: number; h: number; ok: boolean; label?: string };
+
 export interface MapScene {
   readonly layout: Layout;
   setLayerVisible(layer: LayerId, on: boolean): void;
   setSprites(src: SpriteSource): void;
+  /** Re-reads the item layers after they were patched in place. */
+  invalidateItems(): void;
+  setGhost(g: Ghost | null): void;
   setCamera(c: Camera): void;
   resize(w: number, h: number): void;
   destroy(): void;
@@ -49,10 +55,16 @@ export async function createMapScene(canvas: HTMLCanvasElement, map: MapData, op
 
   const world = new Container();
   app.stage.addChild(world);
+  const ghostLayer = new Container();
+  const ghostBox = new Graphics();
+  const ghostText = new Text({ text: "", style: { fontSize: 14, fill: 0xffffff, fontFamily: "sans-serif", stroke: { color: 0x000000, width: 3 } } });
+  ghostLayer.addChild(ghostBox, ghostText);
+  ghostLayer.visible = false;
   const layers: Record<LayerId, Container> = {
     terrain: new Container(), items0: new Container(), items1: new Container(), buildings: new Container(), grid: new Container(),
   };
   for (const id of ["terrain", "items0", "items1", "buildings", "grid"] as const) world.addChild(layers[id]);
+  world.addChild(ghostLayer);
 
   // terrain: one texture for the whole 9x8-acre world, nearest-neighbour
   const img = renderTerrainRGBA(map.terrain, map.acres, opts.acreTiles, TERRAIN_IMAGE_SCALE);
@@ -114,7 +126,9 @@ export async function createMapScene(canvas: HTMLCanvasElement, map: MapData, op
 
   const refreshItems = () => {
     const g = layout.items;
-    const r = visibleTileRange(camera, view, g);
+    const r0 = visibleTileRange(camera, view, g);
+    const MARGIN = 9; // the largest footprint is 10 tiles, so a root can sit 9 tiles outside the view and still show
+    const r = { x0: Math.max(0, r0.x0 - MARGIN), y0: Math.max(0, r0.y0 - MARGIN), x1: r0.x1, y1: r0.y1 };
     for (const n of [0, 1] as const) {
       const layer = map.items[n];
       const pool = pools[n]!;
@@ -124,6 +138,8 @@ export async function createMapScene(canvas: HTMLCanvasElement, map: MapData, op
           const raw = layer.raw[g.height * x + y]!;
           const id = Number(raw & 0xffffn);
           if (id === NONE || id === EXTENSION) continue;
+          const rect = itemSpriteRect(raw, g.tileSize);
+          if (!rect) continue;
           const ref = sprites.resolve(id, Number((raw >> 32n) & 0xffffn));
           const tex = getTexture(ref.url);
           if (!tex) continue;
@@ -132,7 +148,8 @@ export async function createMapScene(canvas: HTMLCanvasElement, map: MapData, op
           const p = tileToWorld(g, x, y);
           s.texture = tex;
           s.position.set(p.x, p.y);
-          s.width = s.height = g.tileSize;
+          s.width = rect.w;
+          s.height = rect.h;
           s.visible = true;
           used++;
         }
@@ -165,6 +182,20 @@ export async function createMapScene(canvas: HTMLCanvasElement, map: MapData, op
     setSprites(src) {
       sprites = src;
       refresh();
+    },
+    invalidateItems() {
+      refresh();
+    },
+    setGhost(gh) {
+      ghostLayer.visible = gh !== null;
+      if (gh) {
+        const p = tileToWorld(layout.items, gh.x, gh.y);
+        const size = layout.items.tileSize;
+        ghostBox.clear().rect(p.x, p.y, gh.w * size, gh.h * size).fill({ color: gh.ok ? 0x30c050 : 0xd03030, alpha: 0.4 }).stroke({ width: 2, color: gh.ok ? 0x30c050 : 0xd03030 });
+        ghostText.text = gh.label ?? "";
+        ghostText.position.set(p.x + 2, p.y + 2);
+      }
+      schedule();
     },
     setCamera(c) {
       camera = clampCamera(c, WORLD_PX, view);

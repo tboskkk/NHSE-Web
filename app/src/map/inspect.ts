@@ -1,4 +1,4 @@
-import type { MapData } from "@nhse/core";
+import { type MapData, rootOf } from "@nhse/core";
 import { BUILDING_TILES, PX_PER_ITEM_TILE, type Layout } from "./layout";
 
 export type Inspection = {
@@ -10,7 +10,7 @@ export type Inspection = {
 };
 
 const NONE = 0xfffe;
-const EXTENSION = 0xfffd;
+const EXTENSION = 0xfffd; // orphan extension tiles stay invisible
 
 /** Read-only description of the hovered terrain tile and item tile (either may be null when off that grid). */
 export function inspectTile(map: MapData, layout: Layout, terrain: { x: number; y: number } | null, item: { x: number; y: number } | null): Inspection {
@@ -29,10 +29,12 @@ export function inspectTile(map: MapData, layout: Layout, terrain: { x: number; 
   if (item) {
     for (const layer of [0, 1] as const) {
       const L = map.items[layer];
-      const raw = L.raw[L.height * item.x + item.y]!;
+      const root = rootOf(map, layer, item.x, item.y);
+      if (!root) continue;
+      const raw = L.raw[L.height * root.x + root.y]!;
       const id = Number(raw & 0xffffn);
       if (id === NONE || id === EXTENSION) continue;
-      items.push({ layer, x: item.x, y: item.y, raw: raw.toString(16).padStart(16, "0"), id, count: Number((raw >> 32n) & 0xffffn) });
+      items.push({ layer, x: root.x, y: root.y, raw: raw.toString(16).padStart(16, "0"), id, count: Number((raw >> 32n) & 0xffffn) });
     }
     const wx = layout.items.originX / PX_PER_ITEM_TILE + item.x;
     const wy = layout.items.originY / PX_PER_ITEM_TILE + item.y;

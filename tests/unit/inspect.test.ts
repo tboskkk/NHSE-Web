@@ -52,3 +52,12 @@ test("a building is hit within its 4x4 item-tile footprint and not just outside 
   expect(inspectTile(m, layout, null, { x: 196, y: 209 - 32 }).building).toBeNull();
   expect(inspectTile(m, layout, null, { x: 192, y: 208 - 32 }).building).toBeNull();
 });
+
+test("hovering an extension tile reports its root item", () => {
+  const m = blank();
+  const root = 0x0000000000001234n;
+  m.items[0].raw[192 * 10 + 10] = root;
+  m.items[0].raw[192 * 11 + 11] = 0xfffdn | (0x1234n << 32n) | (1n << 48n) | (1n << 56n);
+  const r = inspectTile(m, layout, null, { x: 11, y: 11 });
+  expect(r.items).toEqual([{ layer: 0, x: 10, y: 10, raw: root.toString(16).padStart(16, "0"), id: 0x1234, count: 0 }]);
+});
