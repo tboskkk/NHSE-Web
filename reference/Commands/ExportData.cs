@@ -107,7 +107,7 @@ public static class ExportData
 
         var fieldItems = new SortedDictionary<int, object>();
         foreach (var (id, def) in FieldItemList.Items)
-            fieldItems[id] = new { name = def.Name, kind = (int)ItemInfo.GetItemKind(id) };
+            fieldItems[id] = new { name = def.Name, kind = (int)ItemInfo.GetItemKind(id), held = (int)def.HeldItemId };
 
         var recipes = RecipeList.Recipes.ToDictionary(k => k.Key.ToString(), v => (int)v.Value);
 

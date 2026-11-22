@@ -16,3 +16,4 @@ export * from "./save/personal";
 export * from "./edit/session";
 export * from "./edit/ops";
 export * from "./map/mapData";
+export * from "./map/fieldItems";
