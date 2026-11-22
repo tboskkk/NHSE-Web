@@ -17,3 +17,5 @@ export * from "./edit/session";
 export * from "./edit/ops";
 export * from "./map/mapData";
 export * from "./map/fieldItems";
+export * from "./map/footprint";
+export * from "./map/flags";

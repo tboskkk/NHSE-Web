@@ -124,6 +124,10 @@ public static class ExportData
             remakeIds.Add((ushort)id);
         }
 
+        var sizeTable = (byte[])typeof(ItemInfo).GetField("ItemSizes", BindingFlags.NonPublic | BindingFlags.Static)!.GetValue(null)!;
+        var sizeTypes = Enum.GetValues<ItemSizeType>().Where(t => t != ItemSizeType.Unknown).OrderBy(t => (int)t)
+            .Select(t => new { name = t.ToString(), w = t.Width, h = t.Height }).ToArray();
+
         var fieldItems = new SortedDictionary<int, object>();
         foreach (var (id, def) in FieldItemList.Items)
             fieldItems[id] = new { name = def.Name, kind = (int)ItemInfo.GetItemKind(id), held = (int)def.HeldItemId };
@@ -137,6 +141,8 @@ public static class ExportData
             menuIcon = icons,
             menuIconNames = EnumTable<ItemMenuIconType>(),
             buildingTypeNames = EnumTable<BuildingType>(),
+            itemSizes = sizeTable.Select(b => (int)b).ToArray(),
+            itemSizeTypes = sizeTypes,
             kindGroups = new
             {
                 furniture = KindNames(k => k.IsFurniture),

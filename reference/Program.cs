@@ -28,6 +28,7 @@ public static class Program
                 case "save": SaveCmd.Run(args[1], uint.Parse(args[2]), args[3]); break;
                 case "edit": Edit.Run(args[1], args[2], uint.Parse(args[3]), args[4]); break;
                 case "map": MapDump.Run(args[1], args[2]); break;
+                case "item-size": ItemSizeDump.Run(args[1]); break;
                 case "export-data": ExportData.Run(args[1]); break;
                 default: Console.Error.WriteLine($"unknown command {args[0]}"); return 2;
             }
