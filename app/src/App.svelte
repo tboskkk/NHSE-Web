@@ -3,6 +3,7 @@
   import EmptyState from "./components/EmptyState.svelte";
   import HashWarning from "./components/HashWarning.svelte";
   import Sidebar from "./components/Sidebar.svelte";
+  import PlayerSection from "./sections/player/PlayerSection.svelte";
   import Toast from "./components/Toast.svelte";
   import TopBar from "./components/TopBar.svelte";
 
@@ -41,7 +42,9 @@
     <HashWarning />
     <div class="body">
       <Sidebar />
-      <main id="section"><!-- Player editor mounts here (Task 11) --></main>
+      <main id="section">
+        {#if app.section === "player"}<PlayerSection />{/if}
+      </main>
     </div>
   </div>
 {:else}
