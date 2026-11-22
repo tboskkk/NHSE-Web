@@ -6,3 +6,6 @@ export * from "./crypto/aesCtr";
 export * from "./crypto/encryption";
 export * from "./save/revisions";
 export * from "./items/itemInfo";
+export * from "./save/fileHeaderInfo";
+export * from "./save/encryptedFilePair";
+export * from "./save/horizonSave";
