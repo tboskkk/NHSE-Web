@@ -6,8 +6,10 @@ import { cloneFiles, goldenTest, readDir, SAVE } from "../golden/helpers";
 const fetcher = async (path: string) => JSON.parse(await Bun.file(new URL(`../../app/public/${path}`, import.meta.url).pathname).text());
 const eq = (a: Uint8Array, b: Uint8Array) => Buffer.from(a).equals(Buffer.from(b));
 
+const bytes = async (path: string) => new Uint8Array(await Bun.file(new URL(`../../app/public/${path}`, import.meta.url).pathname).arrayBuffer());
+
 const fresh = async () => {
-  const api = createApi(fetcher);
+  const api = createApi(fetcher, bytes);
   const input = readDir(SAVE!);
   const res = await api.load(cloneFiles(input), "en");
   return { api, input, res };
@@ -27,7 +29,7 @@ goldenTest("edit then undo restores the wallet; player view carries item names",
   const r = await api.edit({ op: "wallet", player: 0, value: 777 });
   expect(r.change).toContain("Wallet");
   expect((await api.player(0)).wallet).toBe(777);
-  expect(await api.undo()).not.toBeNull();
+  expect((await api.undo()).label).not.toBeNull();
   expect((await api.player(0)).wallet).toBe(original);
   const pv = await api.player(0);
   expect(pv.pocket.length).toBe(pv.slotCounts.pocket);
@@ -147,4 +149,64 @@ goldenTest("itemName resolves a raw hex value; unknown ids do not throw", async 
   expect(await api.itemName("000000000000fffe")).toBe(none);
   expect(typeof (await api.itemName("000000000000ffff"))).toBe("string");
   expect(typeof (await api.itemName("00000000fffffff0"))).toBe("string");
+});
+
+// ---- map editing ----
+const hex16 = (raw: bigint) => raw.toString(16).padStart(16, "0");
+const items = (await import("../../packages/core/src/generated/items.json")).default as unknown as { itemSizes: number[]; itemSizeTypes: { name: string }[] };
+const idOf = (name: string) => items.itemSizes.findIndex((t) => items.itemSizeTypes[t]?.name === name);
+
+async function freeSpot(api: Awaited<ReturnType<typeof fresh>>["api"], raw: string, layer: 0 | 1 = 0) {
+  for (let x = 60; x < 220; x += 4)
+    for (let y = 60; y < 150; y += 4) {
+      const p = await api.mapPlan({ tool: "place", layer, tiles: [{ x, y }], raw });
+      if (p.op && p.skipped === 0) return { x, y };
+    }
+  throw new Error("no free spot");
+}
+
+goldenTest("edit(mapEdit) reports touched tiles; undo and redo report the same tiles", async () => {
+  const { api } = await fresh();
+  const raw = hex16(BigInt(idOf("S_2_0x2_0")));
+  const { x, y } = await freeSpot(api, raw);
+  const e = await api.edit({ op: "mapEdit", layer: 0, label: "Place", changes: [{ x, y, raw }] });
+  expect(e.touched.length).toBe(16);
+  const root = e.touched.find((t) => t.index === 192 * x + y)!;
+  expect(root).toMatchObject({ layer: 0, raw });
+  const u = await api.undo();
+  expect(u.touched.map((t) => t.index).sort()).toEqual(e.touched.map((t) => t.index).sort());
+  expect(u.touched.every((t) => t.raw === "000000000000fffe")).toBe(true);
+  const r = await api.redo();
+  expect(r.touched).toEqual(e.touched);
+});
+
+goldenTest("non-map edits report no touched tiles", async () => {
+  const { api } = await fresh();
+  expect((await api.edit({ op: "wallet", player: 0, value: 12 })).touched).toEqual([]);
+});
+
+goldenTest("mapPlan never edits; a refused mapEdit rejects and leaves nothing dirty", async () => {
+  const { api } = await fresh();
+  const raw = hex16(BigInt(idOf("S_2_0x2_0")));
+  const p = await api.mapPlan({ tool: "place", layer: 0, tiles: [{ x: 100, y: 100 }], raw });
+  expect(p.counts.placed + p.skipped).toBeGreaterThan(0);
+  expect((await api.build("changed")).size).toBe(0);
+  await expect(api.edit({ op: "mapEdit", layer: 0, label: "x", changes: [{ x: 287, y: 5, raw }] })).rejects.toThrow("outside the map");
+  expect((await api.build("changed")).size).toBe(0);
+});
+
+goldenTest("bulk weed removal plans a batch, applies as one undo step and restores on undo", async () => {
+  const { api } = await fresh();
+  const before = await api.map();
+  const plan = await api.mapPlan({ tool: "removeWeeds", layer: "both" });
+  expect(plan.counts.erased).toBeGreaterThan(0);
+  expect(plan.op).not.toBeNull();
+  const e = await api.edit(plan.op!);
+  expect(e.history.length).toBe(1);
+  const after = await api.map();
+  const weeds = (m: typeof before) => m.items.reduce((n, l) => n + l.raw.filter((r) => Number(r & 0xffffn) >= 60543 && Number(r & 0xffffn) <= 60549).length, 0);
+  expect(weeds(before)).toBeGreaterThan(0);
+  expect(weeds(after)).toBe(0);
+  await api.undo();
+  expect(weeds(await api.map())).toBe(weeds(before));
 });

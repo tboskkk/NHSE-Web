@@ -4,11 +4,15 @@ import type { Request, Response } from "./protocol";
 import { transferables } from "./transfer";
 
 const base = import.meta.env.BASE_URL;
-const api = createApi(async (path) => {
+const get = async (path: string) => {
   const r = await fetch(`${base}${path}`);
   if (!r.ok) throw new Error(`Failed to fetch ${path} (${r.status})`);
-  return r.json();
-});
+  return r;
+};
+const api = createApi(
+  async (path) => (await get(path)).json(),
+  async (path) => new Uint8Array(await (await get(path)).arrayBuffer()),
+);
 
 const post = (msg: Response, transfer: Transferable[] = []) => (self as unknown as Worker).postMessage(msg, transfer);
 

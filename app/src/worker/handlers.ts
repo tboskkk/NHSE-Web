@@ -1,13 +1,16 @@
 import {
   applyOp, describeOp, EditSession, GameStrings, getKind, getMenuIconSprite, HorizonSave, Item, readMap,
-  type ItemArea, type SaveFiles,
+  planErase, planPlace, planRect, planRemoveWhere, planReplaceAll, planToOp, WEED_IDS,
+  type Change, type EditOp, type ItemArea, type Plan, type SaveFiles,
 } from "@nhse/core";
-import type { Api, ItemView, PlayerView } from "./protocol";
+import type { Api, ItemView, PlanRequest, PlanResult, PlayerView, Touched } from "./protocol";
 
 const clone = (files: SaveFiles): SaveFiles => new Map([...files].map(([k, v]) => [k, v.slice()]));
 const hex16 = (raw: bigint) => raw.toString(16).padStart(16, "0");
 
-export function createApi(fetcher: (path: string) => Promise<unknown>): Api {
+const hasMapEdit = (op: EditOp): boolean => op.op === "mapEdit" || (op.op === "batch" && op.ops.some(hasMapEdit));
+
+export function createApi(fetcher: (path: string) => Promise<unknown>, fetchBytes: (path: string) => Promise<Uint8Array> = async () => { throw new Error("Map data is not available."); }): Api {
   let save: HorizonSave | null = null;
   let session: EditSession<HorizonSave> | null = null;
   let strings: GameStrings | null = null;
@@ -21,6 +24,34 @@ export function createApi(fetcher: (path: string) => Promise<unknown>): Api {
     if (!p) langs.set(lang, (p = GameStrings.load(lang, fetcher)));
     return p;
   };
+  let acre: Uint8Array | null = null;
+  const acreTiles = async () => (acre ??= await fetchBytes("data/acretiles.bin"));
+
+  /** Item layer tiles whose bytes a change touched, with their current raw values. */
+  const touchedBy = (change: Change | null): Touched[] => {
+    if (!save || !change) return [];
+    const o = save.revision.mainOffsets;
+    const count = o.fieldItemAcreWidth * 32 * 192;
+    const base = o.fieldItem;
+    const dv = new DataView(save.main.data.buffer, save.main.data.byteOffset, save.main.data.byteLength);
+    const seen = new Set<number>();
+    const out: Touched[] = [];
+    for (const p of change.patches) {
+      if (p.path !== save.main.path) continue;
+      const lo = Math.max(p.offset, base);
+      const hi = Math.min(p.offset + p.after.length, base + count * 16);
+      for (let b = lo; b < hi; b += 1) {
+        const tile = Math.floor((b - base) / 8);
+        if (seen.has(tile)) continue;
+        seen.add(tile);
+        const layer = (tile >= count ? 1 : 0) as 0 | 1;
+        const index = tile - layer * count;
+        out.push({ layer, index, raw: hex16(dv.getBigUint64(base + tile * 8, true)) });
+      }
+    }
+    return out.sort((a, b) => a.layer - b.layer || a.index - b.index);
+  };
+
   const need = () => {
     if (!save || !session || !strings) throw new Error("No save is loaded.");
     return { save, session, strings };
@@ -89,16 +120,44 @@ export function createApi(fetcher: (path: string) => Promise<unknown>): Api {
 
     async edit(op) {
       const { save, session, strings } = need();
+      const env = { acreTiles: hasMapEdit(op) ? await acreTiles() : undefined };
       const label = describeOp(save, strings, op);
-      const change = session.apply(label, (s) => applyOp(s, op));
-      return { change: change ? change.label : null, history: session.changes.map((c) => c.label) };
+      const change = session.apply(label, (s) => applyOp(s, op, env));
+      return { change: change ? change.label : null, history: session.changes.map((c) => c.label), touched: touchedBy(change) };
     },
 
     async undo() {
-      return need().session.undo()?.label ?? null;
+      const c = need().session.undo();
+      return { label: c?.label ?? null, touched: touchedBy(c) };
     },
     async redo() {
-      return need().session.redo()?.label ?? null;
+      const c = need().session.redo();
+      return { label: c?.label ?? null, touched: touchedBy(c) };
+    },
+
+    async mapPlan(req: PlanRequest) {
+      const { save, strings } = need();
+      const ctx = { map: readMap(save.main.data, save.revision), acreTiles: await acreTiles() };
+      const raw = (h: string) => BigInt(`0x${h}`);
+      const name = (h: string) => strings.getItemName(new Item(raw(h)));
+      let plans: Plan[];
+      let label: string;
+      switch (req.tool) {
+        case "place": plans = [planPlace(ctx, req.layer, req.tiles, raw(req.raw))]; label = `Place ${name(req.raw)}`; break;
+        case "erase": plans = [planErase(ctx, req.layer, req.tiles)]; label = "Remove items"; break;
+        case "rect": plans = [planRect(ctx, req.layer, req.rect, req.raw === null ? null : raw(req.raw))]; label = req.raw === null ? "Clear area" : `Fill area with ${name(req.raw)}`; break;
+        case "replaceAll": plans = planReplaceAll(ctx, req.layer, raw(req.from), raw(req.to), req.match); label = `Replace ${name(req.from)} with ${name(req.to)}`; break;
+        case "removeItem": plans = planRemoveWhere(ctx, req.layer, (r) => Number(r & 0xffffn) === req.id); label = `Remove all ${strings.getItemName(new Item(BigInt(req.id)))}`; break;
+        case "removeWeeds": { const w = new Set(WEED_IDS); plans = planRemoveWhere(ctx, req.layer, (r) => w.has(Number(r & 0xffffn))); label = "Remove all weeds"; break; }
+      }
+      const used = plans.filter((p) => p.changes.length > 0);
+      const result: PlanResult = {
+        op: used.length === 0 ? null : used.length === 1 ? planToOp(used[0]!, label) : { op: "batch", label, ops: used.map((p) => planToOp(p, label)) },
+        counts: plans.reduce((a, p) => ({ placed: a.placed + p.counts.placed, erased: a.erased + p.counts.erased, replaced: a.replaced + p.counts.replaced }), { placed: 0, erased: 0, replaced: 0 }),
+        skipped: plans.reduce((n, p) => n + p.skipped.length, 0),
+        sample: plans.flatMap((p) => p.skipped).slice(0, 5),
+      };
+      return result;
     },
 
     async build(mode) {

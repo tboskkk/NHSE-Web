@@ -4,7 +4,7 @@ import {
   supportsFsAccess, toZip, writeFiles,
 } from "@nhse/io";
 import { createClient } from "./api";
-import type { LoadResult } from "../worker/protocol";
+import type { LoadResult, Touched } from "../worker/protocol";
 
 export type Section = "player" | "villagers" | "map" | "collections" | "island";
 
@@ -89,6 +89,14 @@ const track = <T>(p: Promise<T>): Promise<T> => {
   return p.finally(() => pending.delete(p));
 };
 
+const mapTouchedListeners = new Set<(t: Touched[]) => void>();
+/** Registers a listener for item layer tiles changed by an edit, undo or redo; returns an unsubscribe function. */
+export function onMapTouched(cb: (t: Touched[]) => void): () => void {
+  mapTouchedListeners.add(cb);
+  return () => mapTouchedListeners.delete(cb);
+}
+const emitTouched = (t: Touched[]) => { if (t.length) for (const cb of mapTouchedListeners) cb(t); };
+
 /** Applies an edit op through the worker; the single entry point for UI edits. */
 export const edit = (op: EditOp) => track(doEdit(op));
 
@@ -98,6 +106,7 @@ async function doEdit(op: EditOp) {
     const r = await api.edit(op);
     app.history = r.history;
     app.redoable = 0;
+    emitTouched(r.touched);
     await refreshSummary();
     app.rev++;
     return r.change;
@@ -110,7 +119,9 @@ async function doEdit(op: EditOp) {
 export async function undo() {
   await saving;
   if (!app.history.length) return;
-  if (await api.undo()) {
+  const u = await api.undo();
+  if (u.label) {
+    emitTouched(u.touched);
     app.history = app.history.slice(0, -1);
     app.savedCount = Math.min(app.savedCount, app.history.length);
     app.redoable++;
@@ -121,9 +132,10 @@ export async function undo() {
 
 export async function redo() {
   await saving;
-  const label = await api.redo();
-  if (label) {
-    app.history = [...app.history, label];
+  const r = await api.redo();
+  if (r.label) {
+    emitTouched(r.touched);
+    app.history = [...app.history, r.label];
     app.redoable = Math.max(0, app.redoable - 1);
     await refreshSummary();
     app.rev++;
