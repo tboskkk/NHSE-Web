@@ -6,7 +6,7 @@
   "workspaces": ["packages/*", "app"],
   "scripts": {
     "test": "bun test tests/unit tests/golden",
-    "typecheck": "tsc -b packages/core",
+    "typecheck": "tsc -p packages/core && tsc -p packages/io",
     "build": "echo 'no app yet'",
     "vectors": "bun scripts/vectors.ts",
     "gen:data": "bun scripts/gen-data.ts"
