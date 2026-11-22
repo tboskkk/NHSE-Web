@@ -14,3 +14,11 @@ export function spriteItemId(id: number, itemCount: number): number {
   if (held === undefined) return id;
   return held >= itemCount ? id : held;
 }
+
+/** Number of named items (ids below this have menu icons and names). */
+export const ITEM_COUNT: number = items.kind.length;
+
+/** Upstream BuildingType name for a building type id, or `#id` if unknown. */
+export function buildingTypeName(type: number): string {
+  return (items as unknown as { buildingTypeNames: string[] }).buildingTypeNames[type] || `#${type}`;
+}

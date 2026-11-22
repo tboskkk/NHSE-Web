@@ -3,7 +3,6 @@
 
   const soon: { id: Section; label: string }[] = [
     { id: "villagers", label: "Villagers" },
-    { id: "map", label: "Map" },
     { id: "collections", label: "Collections" },
     { id: "island", label: "Island" },
   ];
@@ -20,6 +19,7 @@
     >{p.name}</button>
   {/each}
   <h2>Island</h2>
+  <button class="item" class:active={app.section === "map"} aria-current={app.section === "map" ? "page" : undefined} onclick={() => (app.section = "map")}>Map</button>
   {#each soon as s (s.id)}
     <button class="item" disabled>{s.label} <span class="tag">coming soon</span></button>
   {/each}

@@ -28,3 +28,6 @@ export function makeLayout(itemAcreWidth: number): Layout {
     toWorldPx: (x, y) => ({ x: x * PX_PER_ITEM_TILE, y: y * PX_PER_ITEM_TILE }),
   };
 }
+
+/** Buildings are drawn (and hit-tested) as squares this many item tiles wide (upstream imgScale * 2). */
+export const BUILDING_TILES = 4;

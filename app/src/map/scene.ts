@@ -1,7 +1,7 @@
 import { Application, Container, Graphics, Sprite, Text, Texture } from "pixi.js";
 import type { MapData } from "@nhse/core";
 import { type Camera, clampCamera } from "./camera";
-import { makeLayout, PX_PER_ITEM_TILE, WORLD_PX, type Layout } from "./layout";
+import { BUILDING_TILES, makeLayout, PX_PER_ITEM_TILE, WORLD_PX, type Layout } from "./layout";
 import type { SpriteSource } from "./spriteSource";
 import { renderTerrainRGBA } from "./terrainImage";
 import { OCEAN_RGBA } from "./terrainPalette";
@@ -9,7 +9,7 @@ import { tileToWorld, visibleTileRange } from "./tiles";
 
 export type LayerId = "terrain" | "items0" | "items1" | "buildings" | "grid";
 
-export type SceneOptions = { acreTiles: Uint8Array; sprites: SpriteSource; buildingNames: string[] };
+export type SceneOptions = { acreTiles: Uint8Array; sprites: SpriteSource; buildingName: (type: number) => string };
 
 export interface MapScene {
   readonly layout: Layout;
@@ -22,7 +22,7 @@ export interface MapScene {
 
 const NONE = 0xfffe;
 const EXTENSION = 0xfffd;
-const BUILDING_TILES = 4; // upstream draws buildings as imgScale(2) * 2 item tiles square
+
 const PLAZA_TILES = { w: 24, h: 20 }; // upstream plaza: (6x5) * 2 * imgScale(2)
 const TERRAIN_IMAGE_SCALE = 2; // px per terrain tile in the generated texture
 
@@ -84,7 +84,7 @@ export async function createMapScene(canvas: HTMLCanvasElement, map: MapData, op
     const p = layout.toWorldPx(b.x, b.y);
     const size = BUILDING_TILES * PX_PER_ITEM_TILE;
     layers.buildings.addChild(new Graphics().rect(p.x, p.y, size, size).fill({ color: 0xffd400, alpha: 0.6 }).stroke({ width: 2, color: 0x202020 }));
-    const label = new Text({ text: opts.buildingNames[b.type] || `#${b.type}`, style: { fontSize: 18, fill: 0x101010, fontFamily: "sans-serif" } });
+    const label = new Text({ text: opts.buildingName(b.type), style: { fontSize: 18, fill: 0x101010, fontFamily: "sans-serif" } });
     label.position.set(p.x + 4, p.y + 4);
     layers.buildings.addChild(label);
   }

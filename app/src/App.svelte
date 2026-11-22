@@ -3,6 +3,7 @@
   import EmptyState from "./components/EmptyState.svelte";
   import HashWarning from "./components/HashWarning.svelte";
   import Sidebar from "./components/Sidebar.svelte";
+  import MapSection from "./sections/map/MapSection.svelte";
   import PlayerSection from "./sections/player/PlayerSection.svelte";
   import Toast from "./components/Toast.svelte";
   import TopBar from "./components/TopBar.svelte";
@@ -48,7 +49,7 @@
     <div class="body">
       <Sidebar />
       <main id="section">
-        {#if app.section === "player"}<PlayerSection />{/if}
+        {#if app.section === "player"}<PlayerSection />{:else if app.section === "map"}<MapSection />{/if}
       </main>
     </div>
   </div>
