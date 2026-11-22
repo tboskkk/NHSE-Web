@@ -24,6 +24,11 @@ public static class Edit
             foreach (var o in op.GetProperty("ops").EnumerateArray()) Apply(sav, o);
             return;
         }
+        if (name == "mapEdit")
+        {
+            MapEdit.Apply(sav, op);
+            return;
+        }
         if (name == "townName")
         {
             var pt = sav.Players[0].Personal;
@@ -87,7 +92,7 @@ public static class Edit
         }
     }
 
-    static Item RawItem(string hex)
+    internal static Item RawItem(string hex)
     {
         var v = Convert.ToUInt64(hex, 16);
         Span<byte> b = stackalloc byte[Item.SIZE];
