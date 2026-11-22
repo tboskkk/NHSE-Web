@@ -111,7 +111,7 @@
 
 **Interfaces:**
 - Consumes: `readMap` (Task 3). 
-- Produces: `Api.map(): Promise<MapView>` where `MapView = MapData & { itemNames: Record<number,string> }`? **No** — keep names out: `MapView = MapData & { revisionLabel: string }`; item names resolved on demand by `Api.itemName(raw: string): Promise<string>`. Typed arrays are returned through the existing worker bridge with transfer list; check `app/src/lib/api.ts` and `worker.ts` for how responses are posted and add transferables there.
+- Produces: `Api.map(): Promise<MapView>` where `MapView = MapData & { revisionLabel: string }` (item names are not included), and `Api.itemName(raw: string): Promise<string>` resolving a name on demand from a 16-digit hex raw value. Typed arrays are returned through the existing worker bridge with transfer list; check `app/src/lib/api.ts` and `worker.ts` for how responses are posted and add transferables there.
 
 - [ ] **Step 1: Failing tests** (handlers.test.ts pattern): `map()` throws "No save is loaded." before load; after load returns terrain 112×96 and item layers 288×192 for the example save; two calls return independent buffers; calling `map()` leaves `build("changed")` empty (read-only guarantee); `itemName("000000000000fffe")` is the "none" name and an unknown id does not throw.
 - [ ] **Step 2:** Run, verify fail. **Step 3:** Implement (copy slices from `save.main.data`, never expose live buffer); add transfer support. **Step 4:** Pass. **Step 5:** Commit `"Worker: map() API"`.
