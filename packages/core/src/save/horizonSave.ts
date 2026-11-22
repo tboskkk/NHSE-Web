@@ -1,5 +1,7 @@
 import { decrypt, encrypt } from "../crypto/encryption";
+import { replaceOccurrences } from "../util/bytes";
 import { EncryptedFilePair } from "./encryptedFilePair";
+import { Personal } from "./personal";
 import { SaveLoadError } from "./errors";
 import type { HashRegion, Revision } from "./revisions";
 import type { SaveFiles } from "./types";
@@ -14,7 +16,7 @@ const WHERE_ARE_N = "wherearen";
 export class Player {
   constructor(
     readonly directory: string,
-    readonly personal: EncryptedFilePair,
+    readonly personal: Personal,
     readonly photo: EncryptedFilePair,
     readonly postBox: EncryptedFilePair,
     readonly profile: EncryptedFilePair,
@@ -52,6 +54,7 @@ export class HorizonSave {
       const r = await EncryptedFilePair.read(files, path);
       return new EncryptedFilePair(path, r.data, r.header, r.revision);
     };
+    const asPersonal = (p: EncryptedFilePair) => new Personal(p.path, p.data, p.header, p.revision);
 
     const main = await sizes("main");
     const expected = main.revision.sizes;
@@ -85,7 +88,7 @@ export class HorizonSave {
       check(loaded.profile!, expected.profile);
       if (wan) check(wan, expected.whereAreN);
 
-      const player = new Player(dir, loaded.personal!, loaded.photo_studio_island!, loaded.postbox!, loaded.profile!, wan);
+      const player = new Player(dir, asPersonal(loaded.personal!), loaded.photo_studio_island!, loaded.postbox!, loaded.profile!, wan);
       for (const p of player.pairs()) (used.add(p.dataKey), used.add(p.headerKey));
       players.push(player);
     }
@@ -100,6 +103,18 @@ export class HorizonSave {
 
   invalidHashes(): { path: string; region: HashRegion }[] {
     return this.pairs().flatMap((p) => p.invalidHashes().map((region) => ({ path: p.path, region })));
+  }
+
+  /**
+   * Replaces every occurrence of the original identity bytes with the updated ones in all files
+   * (HorizonSave.ChangeIdentity). Returns the number of replacements.
+   */
+  changeIdentity(original: Uint8Array, updated: Uint8Array): number {
+    const orig = original.slice(); // the source may live inside a file we are about to modify
+    const next = updated.slice();
+    let n = 0;
+    for (const pair of this.pairs()) n += Math.max(0, replaceOccurrences(pair.data, orig, next));
+    return n;
   }
 
   /**

@@ -9,3 +9,7 @@ export * from "./items/itemInfo";
 export * from "./save/fileHeaderInfo";
 export * from "./save/encryptedFilePair";
 export * from "./save/horizonSave";
+export * from "./structures/item";
+export * from "./structures/date";
+export * from "./strings/gameStrings";
+export * from "./save/personal";
