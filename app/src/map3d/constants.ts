@@ -7,3 +7,5 @@ export const CLIFF_RGB = [94, 98, 106] as const; // upstream cliff grey (118,122
 export const BANK_RGB = [138, 122, 90] as const;
 /** Background = the 2D ocean colour: the translucent water plane tints it exactly like it tints the sea tiles, so the horizon is seamless. */
 export const SEA_RGB = 0x80d7c3;
+/** World units per model unit for imported plant models (a footprint tile is 5 model units wide); calibrated by eye. */
+export const MODEL_SCALE = 1 / 5;

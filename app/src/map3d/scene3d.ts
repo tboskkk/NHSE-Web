@@ -3,10 +3,11 @@ import type { Ghost, LayerId } from "../map/scene";
 import * as THREE from "three";
 import { OrbitControls } from "three/examples/jsm/controls/OrbitControls.js";
 import type { SpriteSource } from "../map/spriteSource";
-import { SEA_RGB, WATER_Y } from "./constants";
+import { MODEL_SCALE, SEA_RGB, WATER_Y } from "./constants";
 import { controlsConfig, type Action } from "./controlsMode";
 import { keyDelta } from "./cameraKeys";
 import { groupItems, type Instance } from "./itemGroups";
+import type { LoadedModels } from "./modelPack";
 import { structureBoxes } from "./structureBoxes";
 import { ghostCorners, itemTileOrigin, type Tile, worldToItemTile, worldToTerrainTile } from "./pick";
 import { buildTerrainMesh, buildTileField, heightAt, type TileField } from "./terrainMesh";
@@ -16,6 +17,8 @@ export interface Scene3D {
   refreshStructures(): void;
   refreshItems(): void;
   setSprites(s: SpriteSource): void;
+  /** Imported natural-item models (null clears); items without a ready model keep their billboards. */
+  setModels(m: LoadedModels | null): void;
   setGrid(on: boolean): void;
   /** Applies a camera key (WASD/arrows pan, R/F tilt); false when the key is not a camera key. */
   handleKey(key: string): boolean;
@@ -41,7 +44,7 @@ const WORLD = { w: 288, h: 256 }; // world units (item tiles): 9 x 8 acres
 const MIN_POLAR = 0.15, MAX_POLAR = 1.45;
 const toLinear = (c: number) => Math.pow(c, 2.2); // vertex colours are authored in sRGB
 
-const noop: Scene3D = { refreshTerrain() {}, refreshStructures() {}, refreshItems() {}, setSprites() {}, setGrid() {}, handleKey: () => false, resize() {}, dispose() {}, pick: () => null, setGhost() {}, setEditing() {}, setLayers() {}, projectTile: () => null };
+const noop: Scene3D = { refreshTerrain() {}, refreshStructures() {}, refreshItems() {}, setSprites() {}, setModels() {}, setGrid() {}, handleKey: () => false, resize() {}, dispose() {}, pick: () => null, setGhost() {}, setEditing() {}, setLayers() {}, projectTile: () => null };
 
 /** The three.js scene for the 3D map. Renders on demand; returns an inert scene and calls `onError` if WebGL is unavailable. */
 export function createScene3D(canvas: HTMLCanvasElement, opts: Scene3DOptions): Scene3D {
@@ -167,6 +170,44 @@ export function createScene3D(canvas: HTMLCanvasElement, opts: Scene3DOptions): 
       },
     );
   };
+  // imported natural-item models: ready assets only; items of a model that is still loading or failed keep their billboards
+  let modelAssets = new Map<string, { geometry: THREE.BufferGeometry; texture: THREE.Texture }>();
+  let modelItems = new Map<number, string>();
+  let modelToken = 0;
+  const disposeModels = () => {
+    for (const a of modelAssets.values()) { a.geometry.dispose(); a.texture.dispose(); }
+    modelAssets = new Map();
+    modelItems = new Map();
+  };
+  const loadModelTexture = (png: Uint8Array) =>
+    new Promise<THREE.Texture>((resolve, reject) => {
+      const url = URL.createObjectURL(new Blob([png as BlobPart], { type: "image/png" }));
+      new THREE.TextureLoader().load(url, (t) => { URL.revokeObjectURL(url); t.magFilter = THREE.NearestFilter; t.colorSpace = THREE.SRGBColorSpace; resolve(t); }, undefined, () => { URL.revokeObjectURL(url); reject(new Error("texture failed")); });
+    });
+  function setModels(pack: LoadedModels | null) {
+    const token = ++modelToken;
+    if (!pack) { disposeModels(); refreshItems(); return; }
+    Promise.all(
+      [...pack.models].map(async ([key, m]) => {
+        try {
+          const g = new THREE.BufferGeometry();
+          g.setAttribute("position", new THREE.BufferAttribute(m.geometry.positions, 3));
+          g.setAttribute("normal", new THREE.BufferAttribute(m.geometry.normals, 3));
+          g.setAttribute("uv", new THREE.BufferAttribute(m.geometry.uvs, 2));
+          g.setIndex(new THREE.BufferAttribute(m.geometry.indices, 1));
+          return [key, { geometry: g, texture: await loadModelTexture(m.texture) }] as const;
+        } catch {
+          return null; // a model whose texture fails to load is left out: its items keep their billboards
+        }
+      }),
+    ).then((list) => {
+      if (token !== modelToken || disposed) { for (const e of list) if (e) { e[1].geometry.dispose(); e[1].texture.dispose(); } return; }
+      disposeModels();
+      modelAssets = new Map(list.filter((e): e is NonNullable<typeof e> => e !== null));
+      modelItems = new Map([...pack.items].filter(([, key]) => modelAssets.has(key)));
+      refreshItems();
+    });
+  }
   let itemsToken = 0;
   function refreshItems() {
     const token = ++itemsToken;
@@ -176,7 +217,7 @@ export function createScene3D(canvas: HTMLCanvasElement, opts: Scene3DOptions): 
     }
     itemsGroup.clear();
     upright.length = 0;
-    const groups = groupItems(opts.map, field, sprites);
+    const groups = groupItems(opts.map, field, sprites, (id) => modelItems.get(id) ?? null);
     const add = (url: string, all: Instance[], flat: boolean) =>
       loadTexture(url, (tex) => {
         if (token !== itemsToken || !tex || disposed) return; // stale refresh, or a sprite that failed to load
@@ -204,6 +245,25 @@ export function createScene3D(canvas: HTMLCanvasElement, opts: Scene3DOptions): 
         itemsGroup.add(mesh);
       }
     };
+    for (const [key, all] of groups.models) {
+      const asset = modelAssets.get(key);
+      if (!asset) continue;
+      for (const layer of [0, 1] as const) {
+        const list = all.filter((i) => i.layer === layer);
+        if (list.length === 0) continue;
+        const mesh = new THREE.InstancedMesh(asset.geometry, new THREE.MeshLambertMaterial({ map: asset.texture, alphaTest: 0.5, side: THREE.DoubleSide }), list.length);
+        mesh.userData.layer = layer;
+        mesh.visible = layer === 0 ? layerVis.items0 : layerVis.items1;
+        list.forEach((i, n) => {
+          dummy.position.set(i.x, i.y, i.z);
+          dummy.rotation.set(0, 0, 0);
+          dummy.scale.setScalar(MODEL_SCALE);
+          dummy.updateMatrix();
+          mesh.setMatrixAt(n, dummy.matrix);
+        });
+        itemsGroup.add(mesh);
+      }
+    }
     for (const [url, list] of groups.flat) add(url, list, true);
     for (const [url, list] of groups.upright) add(url, list, false);
     schedule();
@@ -256,6 +316,7 @@ export function createScene3D(canvas: HTMLCanvasElement, opts: Scene3DOptions): 
       sprites = s;
       refreshItems();
     },
+    setModels,
     setGrid(on) {
       gridKey = on;
       applyGrid();
@@ -340,6 +401,7 @@ export function createScene3D(canvas: HTMLCanvasElement, opts: Scene3DOptions): 
       (ghostLine.material as THREE.Material).dispose();
       for (const c of [...structures.children, ...itemsGroup.children] as THREE.Mesh[]) (c.material as THREE.Material).dispose();
       for (const t of textures.values()) t?.dispose();
+      disposeModels();
       renderer.dispose();
     },
   };

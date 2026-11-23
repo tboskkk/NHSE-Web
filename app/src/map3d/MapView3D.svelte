@@ -5,10 +5,11 @@
   import type { SpriteSource } from "../map/spriteSource";
   import { createGestures, type PaintSink } from "./gestures";
   import type { Tile } from "./pick";
+  import type { LoadedModels } from "./modelPack";
   import { createScene3D, type Scene3D } from "./scene3d";
 
   type Hover = { terrain: Tile | null; item: Tile | null } | null;
-  let { map, acreTiles, sprites, layers, version = 0, structuresVersion = 0, terrainVersion = 0, paintGrid = "items", ghost = null, paint = null, onhover, onerror }: {
+  let { map, acreTiles, sprites, layers, version = 0, structuresVersion = 0, terrainVersion = 0, paintGrid = "items", ghost = null, paint = null, models = null, onhover, onerror }: {
     map: MapData;
     acreTiles: Uint8Array;
     sprites: SpriteSource;
@@ -21,6 +22,8 @@
     ghost?: Ghost | null;
     /** Edit-mode gesture sink; null in view mode. Left button / one finger paints, right-drag orbits, Space or middle button pans. */
     paint?: PaintSink | null;
+    /** Imported natural-item models; null draws billboards only. */
+    models?: LoadedModels | null;
     onhover?: (h: Hover) => void;
     onerror: (message: string) => void;
   } = $props();
@@ -75,6 +78,7 @@
   $effect(() => { void structuresVersion; if (structuresVersion > 0) scene?.refreshStructures(); });
   $effect(() => { void version; if (version > 0) scene?.refreshItems(); });
   $effect(() => { scene?.setSprites(sprites); });
+  $effect(() => { scene?.setModels(models); });
   $effect(() => { scene?.setLayers({ ...layers }); });
   $effect(() => { scene?.setGhost(ghost); });
   $effect(() => { scene?.setEditing(paint !== null, spaceHeld); });

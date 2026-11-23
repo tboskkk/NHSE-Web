@@ -440,7 +440,7 @@
             <p class="muted">Loading 3D view…</p>
           {:then { default: MapView3D }}
             {#key map}
-              <MapView3D {map} {acreTiles} {sprites} {layers} {version} {structuresVersion} {terrainVersion} paintGrid={tool === "terrain" ? "terrain" : "items"} {ghost} {paint} {onhover} onerror={(m) => (error3d = m)} />
+              <MapView3D {map} {acreTiles} {sprites} {layers} {version} {structuresVersion} {terrainVersion} paintGrid={tool === "terrain" ? "terrain" : "items"} {ghost} {paint} {models} {onhover} onerror={(m) => (error3d = m)} />
             {/key}
           {:catch e}
             <p class="err" role="alert">The 3D view could not be loaded: {e instanceof Error ? e.message : String(e)}</p>

@@ -71,3 +71,27 @@ test("instances carry their root tile and layer", () => {
   expect(all.find((a) => a.layer === 0)).toMatchObject({ tile: { x: 10, y: 12 } });
   expect(all.find((a) => a.layer === 1)).toMatchObject({ tile: { x: 20, y: 21 } });
 });
+
+test("items with a model key go to the model groups only, at the footprint centre and ground height", () => {
+  const m = emptyMap();
+  m.terrain.elevation[96 * 10 + 10] = 1; // terrain tile (10,10): world units 52..54, ground 2
+  put(m, 0, 52, 20, rawOf(CHAIR)); // item tile (52,20) -> world (52,52) in a 9-acre layer
+  put(m, 1, 80, 40, rawOf(CHAIR));
+  const g = groupItems(m, field(m), src({ kind: "icon", url: "i" }), (id) => (id === CHAIR ? "Oak@-" : null));
+  expect(g.upright.size).toBe(0);
+  expect(g.flat.size).toBe(0);
+  const list = g.models.get("Oak@-")!;
+  expect(list).toHaveLength(2);
+  const a = list.find((i) => i.layer === 0)!;
+  expect(a).toMatchObject({ x: 53, z: 53, w: 2, h: 2, tile: { x: 52, y: 20 } });
+  expect(a.y).toBeGreaterThan(0);
+});
+
+test("an id with no model key still goes to the billboard groups, and no key function means no models", () => {
+  const m = emptyMap();
+  put(m, 0, 5, 5, rawOf(CHAIR));
+  const withKeys = groupItems(m, field(m), src({ kind: "icon", url: "i" }), () => null);
+  expect(withKeys.upright.get("i")).toHaveLength(1);
+  expect(withKeys.models.size).toBe(0);
+  expect(groupItems(m, field(m), src({ kind: "icon", url: "i" })).models.size).toBe(0);
+});
