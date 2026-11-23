@@ -1,5 +1,5 @@
 /** 3D tuning constants (world units are item tiles). Everything that is judged by eye lives here. */
-export const LEVEL_HEIGHT = 2;
+export const LEVEL_HEIGHT = 3; // one cliff level = the real cliff piece depth (about 15 model units / 5)
 export const WATER_Y = -1.5;
 /** Acre template tile classes drawn as water (sea/river family of the 2D class colour table). */
 export const WATER_CLASSES: ReadonlySet<number> = new Set([1, 5, 12, 15, 46, 149, 150]);

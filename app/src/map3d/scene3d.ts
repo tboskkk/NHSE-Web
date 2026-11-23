@@ -106,12 +106,30 @@ export function createScene3D(canvas: HTMLCanvasElement, opts: Scene3DOptions): 
   const terrainPieces = new THREE.Group();
   scene.add(terrainPieces);
   const pieceDummy = new THREE.Object3D();
+  const riverSheetGeo = new THREE.PlaneGeometry(2, 2).rotateX(-Math.PI / 2);
+  const riverSheetMat = new THREE.MeshBasicMaterial({ color: 0x3aa6c8, transparent: true, opacity: 0.55, depthWrite: false });
   function drawTerrainPieces(pieces: Map<string, { x: number; y: number; z: number; rotY: number }[]>) {
     for (const c of terrainPieces.children as THREE.InstancedMesh[]) {
-      for (const mat of Array.isArray(c.material) ? c.material : [c.material]) mat.dispose();
+      if (c.material !== riverSheetMat) for (const mat of Array.isArray(c.material) ? c.material : [c.material]) mat.dispose();
       c.dispose();
     }
     terrainPieces.clear();
+    // rivers above sea level need their own water surface (the global plane only covers sea level)
+    const upperRiver: { x: number; y: number; z: number }[] = [];
+    for (const [key, list] of pieces) if (key.startsWith("River")) for (const i of list) if (i.y > 0.01) upperRiver.push(i);
+    if (upperRiver.length > 0) {
+      const sheet = new THREE.InstancedMesh(riverSheetGeo, riverSheetMat, upperRiver.length);
+      upperRiver.forEach((i, n) => {
+        pieceDummy.position.set(i.x, i.y + WATER_Y + 0.2, i.z);
+        pieceDummy.rotation.set(0, 0, 0);
+        pieceDummy.scale.set(1, 1, 1);
+        pieceDummy.updateMatrix();
+        sheet.setMatrixAt(n, pieceDummy.matrix);
+      });
+      sheet.frustumCulled = false;
+      sheet.renderOrder = 1;
+      terrainPieces.add(sheet);
+    }
     for (const [key, list] of pieces) {
       const asset = modelAssets.get(key);
       if (!asset?.textures) continue;
@@ -473,7 +491,9 @@ export function createScene3D(canvas: HTMLCanvasElement, opts: Scene3DOptions): 
       (ghostLine.material as THREE.Material).dispose();
       for (const c of [...structures.children, ...itemsGroup.children] as THREE.Mesh[]) (c.material as THREE.Material).dispose();
       for (const t of textures.values()) t?.dispose();
-      for (const c of terrainPieces.children as THREE.InstancedMesh[]) for (const mat of Array.isArray(c.material) ? c.material : [c.material]) mat.dispose();
+      for (const c of terrainPieces.children as THREE.InstancedMesh[]) if (c.material !== riverSheetMat) for (const mat of Array.isArray(c.material) ? c.material : [c.material]) mat.dispose();
+      riverSheetGeo.dispose();
+      riverSheetMat.dispose();
       disposeModels();
       renderer.dispose();
     },

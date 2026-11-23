@@ -3,8 +3,8 @@ import type { DecodedTexture } from "../sprites/bntx";
 
 export type TexLookup = (name: string) => DecodedTexture | null;
 
-/** Summer grass: the `mGrass_Grd` ramp pixel at this row and at this fraction of the width (tuned by eye). */
-export const GRASS = { row: 30, column: 0.6 };
+/** Summer grass: the `mGrass_Grd` ramp pixel at this row and at this fraction of the width. Rows are seasons (0-15 snow, 16-39 spring/early summer yellow-green, 40-63 summer greens, 64+ autumn); row 56 is a lush green close to the flat ground colour. */
+export const GRASS = { row: 56, column: 0.6 };
 const WATERFALL_RGB = [150, 210, 235];
 const OPACITY_CUTOFF = 100;
 const MAGENTA = [255, 0, 255];

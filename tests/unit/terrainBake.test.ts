@@ -17,7 +17,7 @@ const px = (cell: Uint8Array, x: number, y: number, size: number) => [...cell.su
 
 // 10 columns x 40 rows: pixel = (x, y, 7)
 const grd = rgba(10, 40, (x, y) => [x, y, 7, 255]);
-const expectedGrass = [Math.round(GRASS.column * 9), GRASS.row, 7, 255];
+const expectedGrass = [Math.round(GRASS.column * 9), Math.min(GRASS.row, 39), 7, 255]; // the 40-row test ramp clamps the row
 
 test("grass materials take the summer colour from mGrass_Grd and alpha from the opacity map", () => {
   const r = bakeTerrainMaterial("mGrass", lookup({ mGrass_Grd: grd }), 4);
