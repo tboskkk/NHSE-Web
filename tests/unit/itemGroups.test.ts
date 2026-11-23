@@ -61,3 +61,13 @@ test("items are placed relative to the layer origin when fewer acres are used", 
   const g = groupItems(m, field(m), src({ kind: "pack", url: "p" }));
   expect(g.flat.get("p")![0]).toMatchObject({ x: 32 + 3 + 1, z: 32 + 4 + 1 });
 });
+
+test("instances carry their root tile and layer", () => {
+  const m = emptyMap();
+  put(m, 0, 10, 12, rawOf(CHAIR));
+  put(m, 1, 20, 21, rawOf(CHAIR));
+  const g = groupItems(m, field(m), src({ kind: "icon", url: "i" }));
+  const all = g.upright.get("i")!;
+  expect(all.find((a) => a.layer === 0)).toMatchObject({ tile: { x: 10, y: 12 } });
+  expect(all.find((a) => a.layer === 1)).toMatchObject({ tile: { x: 20, y: 21 } });
+});

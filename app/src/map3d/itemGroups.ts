@@ -2,7 +2,7 @@ import { isExtension, isNone, itemFootprint, type MapData } from "@nhse/core";
 import type { SpriteSource } from "../map/spriteSource";
 import { heightAt, type TileField } from "./terrainMesh";
 
-export type Instance = { x: number; y: number; z: number; w: number; h: number };
+export type Instance = { x: number; y: number; z: number; w: number; h: number; tile: { x: number; y: number }; layer: 0 | 1 };
 export type ItemGroups = { flat: Map<string, Instance[]>; upright: Map<string, Instance[]> };
 
 const ACRE = 32;
@@ -13,7 +13,7 @@ const ACRE = 32;
  */
 export function groupItems(map: MapData, f: TileField, sprites: SpriteSource): ItemGroups {
   const out: ItemGroups = { flat: new Map(), upright: new Map() };
-  for (const layer of map.items) {
+  for (const [li, layer] of map.items.entries()) {
     const originX = ((9 - layer.width / ACRE) / 2) * ACRE;
     for (let x = 0; x < layer.width; x++) {
       for (let y = 0; y < layer.height; y++) {
@@ -25,7 +25,8 @@ export function groupItems(map: MapData, f: TileField, sprites: SpriteSource): I
         const ref = sprites.resolve(Number(raw & 0xffffn), Number((raw >> 32n) & 0xffffn));
         const flat = ref.kind === "pack";
         const side = Math.max(fp.w, fp.h);
-        const inst: Instance = flat ? { x: cx, y: ground + 0.05, z: cz, w: fp.w, h: fp.h } : { x: cx, y: ground, z: cz, w: side, h: side };
+        const tile = { x, y }, lay = li as 0 | 1;
+        const inst: Instance = flat ? { x: cx, y: ground + 0.05, z: cz, w: fp.w, h: fp.h, tile, layer: lay } : { x: cx, y: ground, z: cz, w: side, h: side, tile, layer: lay };
         const groups = flat ? out.flat : out.upright;
         const list = groups.get(ref.url);
         if (list) list.push(inst);

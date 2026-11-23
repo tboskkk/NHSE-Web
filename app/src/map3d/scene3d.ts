@@ -1,12 +1,15 @@
 import { type MapData } from "@nhse/core";
+import type { Ghost, LayerId } from "../map/scene";
 import * as THREE from "three";
 import { OrbitControls } from "three/examples/jsm/controls/OrbitControls.js";
 import type { SpriteSource } from "../map/spriteSource";
 import { SEA_RGB, WATER_Y } from "./constants";
+import { controlsConfig, type Action } from "./controlsMode";
 import { keyDelta } from "./cameraKeys";
 import { groupItems, type Instance } from "./itemGroups";
 import { structureBoxes } from "./structureBoxes";
-import { buildTerrainMesh, buildTileField, type TileField } from "./terrainMesh";
+import { ghostCorners, itemTileOrigin, type Tile, worldToItemTile, worldToTerrainTile } from "./pick";
+import { buildTerrainMesh, buildTileField, heightAt, type TileField } from "./terrainMesh";
 
 export interface Scene3D {
   refreshTerrain(): void;
@@ -18,6 +21,18 @@ export interface Scene3D {
   handleKey(key: string): boolean;
   resize(w: number, h: number): void;
   dispose(): void;
+  /**
+   * Tile(s) under a canvas point: upright billboards first (when `billboards`), then terrain, then the water plane.
+   * Null when the ray hits nothing; `item`/`terrain` are null when the hit lies outside that grid.
+   */
+  pick(clientX: number, clientY: number, opts: { billboards: boolean }): { item: Tile | null; terrain: Tile | null } | null;
+  /** Translucent rectangle draped on the ground over an item-tile footprint (null hides it). */
+  setGhost(g: Ghost | null): void;
+  /** Edit mode frees the left button and one finger for painting; Space turns the left button into a pan. */
+  setEditing(editing: boolean, spaceHeld: boolean): void;
+  setLayers(l: Record<LayerId, boolean>): void;
+  /** Canvas-relative CSS px of an item tile's centre at ground height; null when behind the camera. */
+  projectTile(x: number, y: number): { x: number; y: number } | null;
 }
 
 export type Scene3DOptions = { map: MapData; acreTiles: Uint8Array; sprites: SpriteSource; onError(message: string): void };
@@ -26,9 +41,9 @@ const WORLD = { w: 288, h: 256 }; // world units (item tiles): 9 x 8 acres
 const MIN_POLAR = 0.15, MAX_POLAR = 1.45;
 const toLinear = (c: number) => Math.pow(c, 2.2); // vertex colours are authored in sRGB
 
-const noop: Scene3D = { refreshTerrain() {}, refreshStructures() {}, refreshItems() {}, setSprites() {}, setGrid() {}, handleKey: () => false, resize() {}, dispose() {} };
+const noop: Scene3D = { refreshTerrain() {}, refreshStructures() {}, refreshItems() {}, setSprites() {}, setGrid() {}, handleKey: () => false, resize() {}, dispose() {}, pick: () => null, setGhost() {}, setEditing() {}, setLayers() {}, projectTile: () => null };
 
-/** The three.js scene for the read-only 3D map. Renders on demand; returns an inert scene and calls `onError` if WebGL is unavailable. */
+/** The three.js scene for the 3D map. Renders on demand; returns an inert scene and calls `onError` if WebGL is unavailable. */
 export function createScene3D(canvas: HTMLCanvasElement, opts: Scene3DOptions): Scene3D {
   let renderer: THREE.WebGLRenderer;
   try {
@@ -120,6 +135,7 @@ export function createScene3D(canvas: HTMLCanvasElement, opts: Scene3DOptions): 
   const textures = new Map<string, THREE.Texture | null>();
   const planeGeo = new THREE.PlaneGeometry(1, 1);
   const upright: { mesh: THREE.InstancedMesh; list: Instance[] }[] = [];
+  let layerVis: Record<LayerId, boolean> = { terrain: true, items0: true, items1: true, buildings: true, grid: false };
   const dummy = new THREE.Object3D();
   const placeUpright = () => {
     const az = controls.getAzimuthalAngle();
@@ -161,10 +177,18 @@ export function createScene3D(canvas: HTMLCanvasElement, opts: Scene3DOptions): 
     itemsGroup.clear();
     upright.length = 0;
     const groups = groupItems(opts.map, field, sprites);
-    const add = (url: string, list: Instance[], flat: boolean) =>
+    const add = (url: string, all: Instance[], flat: boolean) =>
       loadTexture(url, (tex) => {
         if (token !== itemsToken || !tex || disposed) return; // stale refresh, or a sprite that failed to load
+        for (const layer of [0, 1] as const) addLayer(tex, all.filter((i) => i.layer === layer), flat, layer);
+        schedule();
+      });
+    const addLayer = (tex: THREE.Texture, list: Instance[], flat: boolean, layer: 0 | 1) => {
+      if (list.length === 0) return;
+      {
         const mesh = new THREE.InstancedMesh(planeGeo, new THREE.MeshBasicMaterial({ map: tex, transparent: true, alphaTest: 0.05, side: THREE.DoubleSide }), list.length);
+        mesh.userData.layer = layer;
+        mesh.visible = layer === 0 ? layerVis.items0 : layerVis.items1;
         if (flat) {
           list.forEach((i, n) => {
             dummy.position.set(i.x, i.y, i.z);
@@ -178,8 +202,8 @@ export function createScene3D(canvas: HTMLCanvasElement, opts: Scene3DOptions): 
           placeUpright();
         }
         itemsGroup.add(mesh);
-        schedule();
-      });
+      }
+    };
     for (const [url, list] of groups.flat) add(url, list, true);
     for (const [url, list] of groups.upright) add(url, list, false);
     schedule();
@@ -192,6 +216,30 @@ export function createScene3D(canvas: HTMLCanvasElement, opts: Scene3DOptions): 
   const grid = new THREE.LineSegments(new THREE.BufferGeometry().setAttribute("position", new THREE.Float32BufferAttribute(gridPts, 3)), new THREE.LineBasicMaterial({ color: 0xffffff, transparent: true, opacity: 0.4 }));
   grid.visible = false;
   scene.add(grid);
+  let gridKey = false;
+  const applyGrid = () => (grid.visible = layerVis.grid || gridKey);
+
+
+  // ---- ghost (translucent footprint draped on the ground) ----
+  const ghostGeo = new THREE.BufferGeometry();
+  ghostGeo.setAttribute("position", new THREE.BufferAttribute(new Float32Array(12), 3));
+  ghostGeo.setIndex([0, 1, 2, 0, 2, 3]);
+  const ghostFill = new THREE.Mesh(ghostGeo, new THREE.MeshBasicMaterial({ color: 0x30c050, transparent: true, opacity: 0.4, side: THREE.DoubleSide, depthTest: false }));
+  const ghostLine = new THREE.LineLoop(ghostGeo, new THREE.LineBasicMaterial({ color: 0x30c050, depthTest: false }));
+  for (const o of [ghostFill, ghostLine]) {
+    o.renderOrder = 10;
+    o.frustumCulled = false;
+    o.visible = false;
+    scene.add(o);
+  }
+  const itemAcres = () => opts.map.items[0].width / 32;
+
+  // ---- picking ----
+  const ray = new THREE.Raycaster();
+  const ndc = new THREE.Vector2();
+  const MOUSE_OF: Record<string, THREE.MOUSE> = { rotate: THREE.MOUSE.ROTATE, pan: THREE.MOUSE.PAN, dolly: THREE.MOUSE.DOLLY };
+  const mouse = (a: Action) => (a ? MOUSE_OF[a]! : null);
+  const touchOf = (a: Action) => (a === "rotate" ? THREE.TOUCH.ROTATE : a === "pan" ? THREE.TOUCH.PAN : null);
 
   controls.addEventListener("change", () => {
     placeUpright();
@@ -209,7 +257,8 @@ export function createScene3D(canvas: HTMLCanvasElement, opts: Scene3DOptions): 
       refreshItems();
     },
     setGrid(on) {
-      grid.visible = on;
+      gridKey = on;
+      applyGrid();
       schedule();
     },
     handleKey(key) {
@@ -224,6 +273,56 @@ export function createScene3D(canvas: HTMLCanvasElement, opts: Scene3DOptions): 
       schedule();
       return true;
     },
+    pick(clientX, clientY, { billboards }) {
+      const r = canvas.getBoundingClientRect();
+      if (!(r.width > 0 && r.height > 0)) return null;
+      ndc.set(((clientX - r.left) / r.width) * 2 - 1, -((clientY - r.top) / r.height) * 2 + 1);
+      ray.setFromCamera(ndc, camera);
+      const ground = ray.intersectObject(terrain, false)[0] ?? ray.intersectObject(water, false)[0];
+      let bill: { dist: number; item: Tile; x: number; z: number } | null = null;
+      if (billboards) {
+        const hit = ray.intersectObjects(upright.map((u) => u.mesh).filter((m) => m.visible), false)[0];
+        if (hit && hit.instanceId !== undefined) {
+          const inst = upright.find((u) => u.mesh === hit.object)?.list[hit.instanceId];
+          if (inst) bill = { dist: hit.distance, item: inst.tile, x: inst.x, z: inst.z };
+        }
+      }
+      if (bill && (!ground || bill.dist <= ground.distance)) return { item: bill.item, terrain: worldToTerrainTile(bill.x, bill.z) };
+      if (!ground) return null;
+      return { item: worldToItemTile(ground.point.x, ground.point.z, itemAcres()), terrain: worldToTerrainTile(ground.point.x, ground.point.z) };
+    },
+    setGhost(g) {
+      ghostFill.visible = ghostLine.visible = g !== null;
+      if (g) {
+        (ghostGeo.getAttribute("position") as THREE.BufferAttribute).set(ghostCorners(g, itemAcres(), field));
+        ghostGeo.getAttribute("position").needsUpdate = true;
+        const c = g.ok ? 0x30c050 : 0xd03030;
+        (ghostFill.material as THREE.MeshBasicMaterial).color.setHex(c);
+        (ghostLine.material as THREE.LineBasicMaterial).color.setHex(c);
+      }
+      schedule();
+    },
+    setEditing(editing, spaceHeld) {
+      const c = controlsConfig(editing, spaceHeld);
+      controls.mouseButtons = { LEFT: mouse(c.left), MIDDLE: mouse(c.middle), RIGHT: mouse(c.right) };
+      controls.touches = { ONE: touchOf(c.oneFinger), TWO: c.twoFingers === "dolly-rotate" ? THREE.TOUCH.DOLLY_ROTATE : THREE.TOUCH.DOLLY_PAN };
+    },
+    setLayers(l) {
+      layerVis = l;
+      terrain.visible = water.visible = l.terrain;
+      structures.visible = l.buildings;
+      for (const m of itemsGroup.children) m.visible = m.userData.layer === 0 ? l.items0 : l.items1;
+      applyGrid();
+      schedule();
+    },
+    projectTile(x, y) {
+      const o = itemTileOrigin({ x, y }, itemAcres());
+      const wx = o.x + 0.5, wz = o.z + 0.5;
+      const v = new THREE.Vector3(wx, heightAt(field, wx, wz), wz).project(camera);
+      if (v.z < -1 || v.z > 1) return null;
+      const r = canvas.getBoundingClientRect();
+      return { x: ((v.x + 1) / 2) * r.width, y: ((1 - v.y) / 2) * r.height };
+    },
     resize(w, h) {
       renderer.setSize(w, h, false);
       camera.aspect = w / h;
@@ -236,6 +335,9 @@ export function createScene3D(canvas: HTMLCanvasElement, opts: Scene3DOptions): 
       controls.dispose();
       terrain.geometry.dispose();
       (terrain.material as THREE.Material).dispose();
+      ghostGeo.dispose();
+      (ghostFill.material as THREE.Material).dispose();
+      (ghostLine.material as THREE.Material).dispose();
       for (const c of [...structures.children, ...itemsGroup.children] as THREE.Mesh[]) (c.material as THREE.Material).dispose();
       for (const t of textures.values()) t?.dispose();
       renderer.dispose();
