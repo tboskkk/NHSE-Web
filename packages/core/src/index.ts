@@ -24,3 +24,5 @@ export * from "./map/ground";
 export * from "./map/placement";
 export * from "./map/applyMapEdit";
 export * from "./map/plan";
+export * from "./map/buildingTypes";
+export * from "./map/applyBuildingEdit";

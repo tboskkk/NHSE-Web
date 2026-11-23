@@ -14,7 +14,7 @@ export function emptyMap(): MapData {
   return {
     terrain: { width: 112, height: 96, unitModel: z(), variation: z(), angle: z(), roadModel: z(), roadVariation: z(), roadAngle: z(), elevation: z() },
     items: [layer(), layer()],
-    buildings: [],
+    buildings: Array.from({ length: 46 }, () => ({ type: 0, x: 0, y: 0, angle: 0, bit: 0, subType: 0, typeArg: 0, uniqueId: 0 })),
     acres: new Uint16Array(72),
     acreWidth: 9,
     acreHeight: 8,

@@ -7,6 +7,10 @@ export type PlaceCtx = { map: MapData; acreTiles: Uint8Array };
 
 const REASON: Record<Exclude<Ground, "land">, string> = { water: "water", cliff: "cliff", blocked: "blocked ground" };
 
+export function groundReason(g: Exclude<Ground, "land">): string {
+  return REASON[g];
+}
+
 /** Tiles covered by `raw` rooted at (x, y), root first, column by column. */
 export function footprintTiles(raw: bigint, x: number, y: number): { x: number; y: number }[] {
   const { w, h } = itemFootprint(raw);
