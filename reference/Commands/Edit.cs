@@ -29,6 +29,11 @@ public static class Edit
             MapEdit.Apply(sav, op);
             return;
         }
+        if (name == "terrainEdit")
+        {
+            TerrainEdit.Apply(sav, op);
+            return;
+        }
         if (name == "buildingEdit")
         {
             BuildingEdit.Apply(sav, op);
