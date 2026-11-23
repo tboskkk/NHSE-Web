@@ -10,7 +10,7 @@
   import BulkPanel from "../../map/BulkPanel.svelte";
   import BuildingPanel from "../../map/BuildingPanel.svelte";
   import TerrainPanel from "../../map/TerrainPanel.svelte";
-  import { clearRoadOp, elevationOp, rotateOp, stampOp, terrainTileUnder, type StampPart, type TerrainMode } from "../../map/terrainTool";
+  import { clearRoadOp, elevationOp, keepPlannable, rotateOp, stampOp, terrainTileUnder, type StampPart, type TerrainMode } from "../../map/terrainTool";
   import { addOp, hitTarget, moveOp, reconcileSelection, targetRect, type Target } from "../../map/buildingTool";
   import MapBrush from "../../map/MapBrush.svelte";
   import MapToolbar from "../../map/MapToolbar.svelte";
@@ -143,9 +143,13 @@
   async function commitTerrain(op: TerrainEditOp) {
     if (op.changes.length === 0) { showToast("Nothing to change."); return; }
     try {
-      const r = await api.terrainPlan(op);
+      // drop tiles the strict rules refuse so one bad tile does not cancel the whole drag
+      const { op: good, skipped, reason } = await keepPlannable(op, (o) => api.terrainPlan(o));
+      if (good.changes.length === 0) { showToast(reason ?? "Nothing to change."); return; }
+      const r = await api.terrainPlan(good);
       if (!r.ok) { showToast(r.reason); return; }
-      await edit(op);
+      await edit(good);
+      if (skipped) status = `skipped ${skipped} tile${skipped === 1 ? "" : "s"} (${reason})`;
     } catch (e) {
       showToast(e instanceof Error ? e.message : String(e));
     }

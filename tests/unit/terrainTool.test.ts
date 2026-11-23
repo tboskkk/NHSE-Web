@@ -62,3 +62,23 @@ test("terrainTileUnder reads a tile and returns null outside the layer", () => {
   expect(terrainTileUnder(m, { x: 112, y: 0 })).toBeNull();
   expect(terrainTileUnder(m, { x: 0, y: -1 })).toBeNull();
 });
+
+import { keepPlannable } from "../../app/src/map/terrainTool";
+
+test("keepPlannable drops tiles the planner refuses and keeps the rest, reporting the first reason", async () => {
+  const m = emptyMap();
+  const op = elevationOp(m, [{ x: 1, y: 1 }, { x: 2, y: 2 }, { x: 3, y: 3 }], 1);
+  const check = async (o: { changes: { x: number }[] }) => (o.changes[0]!.x === 2 ? ({ ok: false, reason: "tile (2, 2) is in a fixed acre" } as const) : ({ ok: true } as const));
+  const r = await keepPlannable(op, check);
+  expect(r.op.changes.map((c) => c.x)).toEqual([1, 3]);
+  expect(r.skipped).toBe(1);
+  expect(r.reason).toBe("tile (2, 2) is in a fixed acre");
+});
+
+test("keepPlannable returns an empty op when nothing is plannable and keeps label", async () => {
+  const op = elevationOp(emptyMap(), [{ x: 1, y: 1 }], 1);
+  const r = await keepPlannable(op, async () => ({ ok: false, reason: "no" }));
+  expect(r.op.changes).toEqual([]);
+  expect(r.op.label).toBe("Raise terrain");
+  expect(r.skipped).toBe(1);
+});

@@ -52,3 +52,25 @@ export function rotateOp(map: MapData, tiles: Tile[]): TerrainEditOp {
 export function clearRoadOp(map: MapData, tiles: Tile[]): TerrainEditOp {
   return build(map, "Clear road", tiles, (c) => (c.roadModel === 0 && c.roadVariation === 0 && c.roadAngle === 0 ? null : { ...c, roadModel: 0, roadVariation: 0, roadAngle: 0 }));
 }
+
+/**
+ * A stroke is planned as one atomic op, so one fixed-acre or out-of-range tile would refuse the whole drag.
+ * Plans each change on its own and keeps only the ones `check` accepts; `reason` is the first refusal.
+ */
+export async function keepPlannable(
+  op: TerrainEditOp,
+  check: (op: TerrainEditOp) => Promise<{ ok: true } | { ok: false; reason: string }>,
+): Promise<{ op: TerrainEditOp; skipped: number; reason?: string }> {
+  const changes: Change[] = [];
+  let skipped = 0;
+  let reason: string | undefined;
+  for (const c of op.changes) {
+    const r = await check({ ...op, changes: [c] });
+    if (r.ok) changes.push(c);
+    else {
+      skipped++;
+      reason ??= r.reason;
+    }
+  }
+  return { op: { ...op, changes }, skipped, ...(reason ? { reason } : {}) };
+}
