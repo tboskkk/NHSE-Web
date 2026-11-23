@@ -46,7 +46,11 @@
   let strokeTick = $state(0);
   let status = $state("");
   const blocked = $derived((app.loaded?.invalidHashes.length ?? 0) > 0 && !app.hashWarningDismissed ? "Dismiss the hash warning above to enable editing." : null);
-  const editing = $derived(mode === "edit" && blocked === null);
+  let view = $state<"2d" | "3d">("2d");
+  let error3d = $state<string | null>(null);
+  const toolbarBlocked = $derived(view === "3d" ? "Switch to 2D to edit" : blocked);
+  const editing = $derived(mode === "edit" && blocked === null && view === "2d");
+  $effect(() => { if (view === "3d") mode = "view"; });
   // building tool: selection, drag and add-mode state (raw: ops are posted to the worker)
   let selected = $state.raw<Target | null>(null);
   let addType = $state<number | null>(null);
@@ -386,7 +390,11 @@
 
 <div class="map">
   <h1>Map <span class="muted">· {editing ? (tool === "building" ? "editing buildings" : tool === "terrain" ? "editing terrain" : "editing items") : "viewer"}</span></h1>
-  <MapToolbar bind:mode bind:layer={editLayer} bind:tool {blocked} />
+  <MapToolbar bind:mode bind:layer={editLayer} bind:tool blocked={toolbarBlocked} />
+  <div class="seg" role="group" aria-label="View">
+    <button data-testid="view2d" class:on={view === "2d"} aria-pressed={view === "2d"} onclick={() => { view = "2d"; error3d = null; }}>2D</button>
+    <button data-testid="view3d" class:on={view === "3d"} aria-pressed={view === "3d"} onclick={() => (view = "3d")}>3D</button>
+  </div>
   <div class="bar">
     <fieldset>
       <legend class="visually-hidden">Layers</legend>
@@ -405,6 +413,24 @@
     <p class="err" role="alert">The map could not be shown: {error}. Nothing in your save was changed.</p>
   {:else if map && acreTiles}
     <div class="stage">
+      {#if view === "3d"}
+        {#if error3d}
+          <div class="err" role="alert">
+            <p>The 3D view could not be shown: {error3d}. Nothing in your save was changed.</p>
+            <button onclick={() => { view = "2d"; error3d = null; }}>Back to 2D</button>
+          </div>
+        {:else}
+          {#await import("../../map3d/MapView3D.svelte")}
+            <p class="muted">Loading 3D view…</p>
+          {:then { default: MapView3D }}
+            {#key map}
+              <MapView3D {map} {acreTiles} {sprites} {version} {structuresVersion} {terrainVersion} onerror={(m) => (error3d = m)} />
+            {/key}
+          {:catch e}
+            <p class="err" role="alert">The 3D view could not be loaded: {e instanceof Error ? e.message : String(e)}</p>
+          {/await}
+        {/if}
+      {:else}
       {#await import("../../map/MapView.svelte")}
         <p class="muted">Loading map…</p>
       {:then { default: MapView }}
@@ -414,6 +440,7 @@
       {:catch e}
         <p class="err" role="alert">The map viewer could not be loaded: {e instanceof Error ? e.message : String(e)}</p>
       {/await}
+      {/if}
       <div class="side">
         {#if editing && tool === "building" && store}
           <BuildingPanel map={store.map} {version} {acreW} bind:selected bind:addType />
@@ -446,5 +473,8 @@
   .side { display: flex; flex-direction: column; gap: 12px; width: 15rem; flex: none; overflow-y: auto; }
   .status { margin: 0; min-height: 1.2em; font-size: 0.85rem; }
   .err { color: var(--error); }
+  .seg { display: inline-flex; align-self: flex-start; border: 1px solid var(--border); border-radius: var(--radius); overflow: hidden; }
+  .seg button { border: 0; border-radius: 0; }
+  .seg button.on { background: var(--accent); color: var(--accent-text); }
   @media (max-width: 640px) { .stage { flex-direction: column; } }
 </style>
