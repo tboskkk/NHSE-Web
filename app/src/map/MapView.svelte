@@ -8,7 +8,7 @@
   import { screenToTile } from "./tiles";
 
   type Hover = { terrain: { x: number; y: number } | null; item: { x: number; y: number } | null } | null;
-  let { map, acreTiles, sprites, layers, version = 0, structuresVersion = 0, ghost = null, dim = null, paint = null, onhover, onerror }: {
+  let { map, acreTiles, sprites, layers, version = 0, structuresVersion = 0, terrainVersion = 0, ghost = null, dim = null, paint = null, onhover, onerror }: {
     map: MapData;
     acreTiles: Uint8Array;
     sprites: SpriteSource;
@@ -16,6 +16,7 @@
     /** Bumped after the item layers were patched in place. */
     version?: number;
     structuresVersion?: number;
+    terrainVersion?: number;
     ghost?: Ghost | null;
     /** An item layer drawn faded (the one that is not being edited). */
     dim?: LayerId | null;
@@ -71,6 +72,7 @@
   $effect(() => { for (const id of Object.keys(layers) as LayerId[]) scene?.setLayerVisible(id, layers[id]); });
   $effect(() => { scene?.setSprites(sprites); });
   $effect(() => { void version; scene?.invalidateItems(); });
+  $effect(() => { void terrainVersion; if (terrainVersion > 0) scene?.invalidateTerrain(); });
   $effect(() => { void structuresVersion; scene?.invalidateBuildings(); });
   $effect(() => { scene?.setGhost(ghost); });
   $effect(() => { for (const id of ["items0", "items1"] as const) scene?.setLayerAlpha(id, dim === id ? 0.3 : 1); });

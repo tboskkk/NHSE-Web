@@ -21,6 +21,8 @@ export interface MapScene {
   setSprites(src: SpriteSource): void;
   /** Re-reads the item layers after they were patched in place. */
   invalidateItems(): void;
+  /** Rebuilds the terrain texture from the (patched) terrain arrays. */
+  invalidateTerrain(): void;
   /** Redraws buildings and plaza from the (patched) map. */
   invalidateBuildings(): void;
   setGhost(g: Ghost | null): void;
@@ -74,7 +76,8 @@ export async function createMapScene(canvas: HTMLCanvasElement, map: MapData, op
   const tcanvas = document.createElement("canvas");
   tcanvas.width = img.width;
   tcanvas.height = img.height;
-  tcanvas.getContext("2d")!.putImageData(new ImageData(new Uint8ClampedArray(img.pixels), img.width, img.height), 0, 0);
+  const tctx = tcanvas.getContext("2d")!;
+  tctx.putImageData(new ImageData(new Uint8ClampedArray(img.pixels), img.width, img.height), 0, 0);
   const terrainTex = Texture.from(tcanvas);
   terrainTex.source.scaleMode = "nearest";
   const terrainSprite = new Sprite(terrainTex);
@@ -196,6 +199,12 @@ export async function createMapScene(canvas: HTMLCanvasElement, map: MapData, op
     },
     invalidateItems() {
       refresh();
+    },
+    invalidateTerrain() {
+      const next = renderTerrainRGBA(map.terrain, map.acres, opts.acreTiles, TERRAIN_IMAGE_SCALE);
+      tctx.putImageData(new ImageData(new Uint8ClampedArray(next.pixels), next.width, next.height), 0, 0);
+      terrainTex.source.update();
+      schedule();
     },
     invalidateBuildings() {
       drawBuildings();

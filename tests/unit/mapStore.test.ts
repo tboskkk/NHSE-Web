@@ -59,3 +59,39 @@ test("structuresVersion bumps only for structure patches, not tile patches", () 
   expect(store.structuresVersion).toBe(1);
   expect(store.version).toBe(2);
 });
+
+const tile = { unitModel: 11, variation: 2, angle: 3, roadModel: 5, roadVariation: 6, roadAngle: 7, elevation: 8 };
+
+test("patchTerrain writes all seven fields in place and bumps version and terrainVersion", () => {
+  const store = createMapStore(view());
+  const held = store.map.terrain.unitModel;
+  const seen: number[] = [];
+  store.subscribe((v) => seen.push(v));
+  store.patchTerrain([{ index: 96 * 3 + 4, tile }]);
+  const t = store.map.terrain;
+  expect(store.map.terrain.unitModel).toBe(held);
+  expect([t.unitModel, t.variation, t.angle, t.roadModel, t.roadVariation, t.roadAngle, t.elevation].map((a) => a[96 * 3 + 4])).toEqual([11, 2, 3, 5, 6, 7, 8]);
+  expect(store.terrainVersion).toBe(1);
+  expect(store.version).toBe(1);
+  expect(seen).toEqual([1]);
+});
+
+test("patchTerrain with a bad index throws and changes nothing", () => {
+  const store = createMapStore(view());
+  expect(() => store.patchTerrain([{ index: 1, tile }, { index: 112 * 96, tile }])).toThrow(RangeError);
+  expect(store.map.terrain.unitModel[1]).toBe(0);
+  expect(store.version).toBe(0);
+  expect(store.terrainVersion).toBe(0);
+});
+
+test("an empty patchTerrain does not bump versions", () => {
+  const store = createMapStore(view());
+  store.patchTerrain([]);
+  expect(store.version + store.terrainVersion).toBe(0);
+});
+
+test("item patches do not bump terrainVersion", () => {
+  const store = createMapStore(view());
+  store.patch([{ layer: 0, index: 1, raw: "0000000000000002" }]);
+  expect(store.terrainVersion).toBe(0);
+});

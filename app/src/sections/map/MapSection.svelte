@@ -2,7 +2,7 @@
   import { onMount } from "svelte";
   import { BUILDING_ITEM_TILES, checkPlacement, footprintTiles, isNone, itemFootprint, Item, ITEM_COUNT, rootOf } from "@nhse/core";
   import { fromZip } from "@nhse/io";
-  import { api, app, edit, onMapTouched, onStructuresTouched, showToast } from "../../lib/state.svelte";
+  import { api, app, edit, onMapTouched, onStructuresTouched, onTerrainTouched, showToast } from "../../lib/state.svelte";
   import type { MapView as MapData } from "../../worker/protocol";
   import { inspectTile, type Inspection } from "../../map/inspect";
   import { makeLayout } from "../../map/layout";
@@ -38,6 +38,7 @@
   let store = $state.raw<MapStore | null>(null);
   let version = $state(0);
   let structuresVersion = $state(0);
+  let terrainVersion = $state(0);
   let hoverItem = $state.raw<{ x: number; y: number } | null>(null);
   let stroke: Stroke | null = null;
   let strokeTick = $state(0);
@@ -61,10 +62,11 @@
   $effect(() => {
     if (!store) return;
     const s = store;
-    const off = s.subscribe((v) => { version = v; structuresVersion = s.structuresVersion; });
+    const off = s.subscribe((v) => { version = v; structuresVersion = s.structuresVersion; terrainVersion = s.terrainVersion; });
     const offTouched = onMapTouched((t) => s.patch(t));
     const offStruct = onStructuresTouched((st) => s.patchStructures(st));
-    return () => { off(); offTouched(); offStruct(); };
+    const offTerrain = onTerrainTouched((t) => s.patchTerrain(t));
+    return () => { off(); offTouched(); offStruct(); offTerrain(); };
   });
 
   $effect(() => { if (tool !== "building") { selected = null; addType = null; drag = null; } });
@@ -245,7 +247,7 @@
       api.map(),
       acreTiles ? Promise.resolve(acreTiles) : fetch(`${base}data/acretiles.bin`).then((r) => (r.ok ? r.arrayBuffer() : Promise.reject(new Error(`acre templates failed to load (${r.status})`)))).then((b) => new Uint8Array(b)),
     ]).then(
-      ([m, a]) => { if (mine === token) { acreTiles = a; map = m; store = createMapStore(m); version = 0; structuresVersion = 0; selected = null; drag = null; addType = null; } },
+      ([m, a]) => { if (mine === token) { acreTiles = a; map = m; store = createMapStore(m); version = 0; structuresVersion = 0; terrainVersion = 0; selected = null; drag = null; addType = null; } },
       (e) => { if (mine === token) error = e instanceof Error ? e.message : String(e); },
     );
   });
@@ -320,7 +322,7 @@
         <p class="muted">Loading map…</p>
       {:then { default: MapView }}
         {#key map}
-          <MapView {map} {acreTiles} {sprites} {layers} {version} {structuresVersion} {ghost} {paint} dim={editing ? (editLayer === 0 ? "items1" : "items0") : null} {onhover} onerror={(m) => (error = m)} />
+          <MapView {map} {acreTiles} {sprites} {layers} {version} {structuresVersion} {terrainVersion} {ghost} {paint} dim={editing ? (editLayer === 0 ? "items1" : "items0") : null} {onhover} onerror={(m) => (error = m)} />
         {/key}
       {:catch e}
         <p class="err" role="alert">The map viewer could not be loaded: {e instanceof Error ? e.message : String(e)}</p>

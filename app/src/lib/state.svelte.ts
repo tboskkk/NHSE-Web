@@ -4,7 +4,7 @@ import {
   supportsFsAccess, toZip, writeFiles,
 } from "@nhse/io";
 import { createClient } from "./api";
-import type { LoadResult, Structures, Touched } from "../worker/protocol";
+import type { LoadResult, Structures, TerrainTouched, Touched } from "../worker/protocol";
 
 export type Section = "player" | "villagers" | "map" | "collections" | "island";
 
@@ -106,6 +106,14 @@ export function onStructuresTouched(cb: (s: Structures) => void): () => void {
   structuresListeners.add(cb);
   return () => structuresListeners.delete(cb);
 }
+const terrainListeners = new Set<(t: TerrainTouched[]) => void>();
+/** Registers a listener for terrain tiles changed by an edit, undo or redo; returns an unsubscribe function. */
+export function onTerrainTouched(cb: (t: TerrainTouched[]) => void): () => void {
+  terrainListeners.add(cb);
+  return () => terrainListeners.delete(cb);
+}
+const emitTerrain = (t: TerrainTouched[]) => { if (t.length) for (const cb of terrainListeners) cb(t); };
+
 const emitStructures = (s: Structures | null) => { if (s) for (const cb of structuresListeners) cb(s); };
 
 /** Applies an edit op through the worker; the single entry point for UI edits. */
@@ -119,6 +127,7 @@ async function doEdit(op: EditOp) {
     app.redoable = 0;
     emitTouched(r.touched);
     emitStructures(r.structures);
+    emitTerrain(r.terrain);
     await refreshSummary();
     app.rev++;
     return r.change;
@@ -135,6 +144,7 @@ export async function undo() {
   if (u.label) {
     emitTouched(u.touched);
     emitStructures(u.structures);
+    emitTerrain(u.terrain);
     app.history = app.history.slice(0, -1);
     app.savedCount = Math.min(app.savedCount, app.history.length);
     app.redoable++;
@@ -149,6 +159,7 @@ export async function redo() {
   if (r.label) {
     emitTouched(r.touched);
     emitStructures(r.structures);
+    emitTerrain(r.terrain);
     app.history = [...app.history, r.label];
     app.redoable = Math.max(0, app.redoable - 1);
     await refreshSummary();
