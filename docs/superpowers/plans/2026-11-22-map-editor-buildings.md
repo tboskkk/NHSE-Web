@@ -15,7 +15,7 @@
 - Strict edits only: a rule violation throws and changes **no bytes**; refusal reasons are user-facing strings.
 - Every accepted edit is byte-identical to upstream through the oracle (`reference/`), golden-tested.
 - Items under a new footprint: **refuse** (never auto-clear). Ground: ordinary buildings and the plaza need `groundAt === "land"` on every footprint tile; building types 26 (bridge) and 27 (incline) skip the ground check ("unverified" in UI).
-- Field rules: type is 0 or in 1-29 or 42; angle 0-3; uniqueId unique among non-empty slots; type value unique among non-empty slots except 26 and 27; subType/typeArg/bit free ("unverified" badge). Value ranges: x,y,uniqueId,subType u16; typeArg u8; bit i8; plaza x,z u32; all integers.
+- Field rules: type is 0 or in 1-29 or 42; angle 0-3; uniqueId unique among non-empty slots, except 0 which is exempt (every game building on the example save has 0), enforced only when the op changes that slot's uniqueId or type from empty; type value unique among non-empty slots except 26 and 27; types 20 and 23 (resident services) may overlap the plaza (the tent stands inside it); subType/typeArg/bit free ("unverified" badge). Value ranges: x,y,uniqueId,subType u16; typeArg u8; bit i8; plaza x,z u32; all integers.
 - A rule only applies to entries the op changes (slot bytes or plaza differ from current); a save that already breaks a rule must not block unrelated edits.
 - Clearing (type 0) zeroes all 20 bytes; retype/move preserve the 4 unused bytes at 0x10.
 - Core is pure TS; `$state.raw` for anything holding an EditOp; UI edits only via `edit(op)` from `app/src/lib/state.svelte.ts`.
