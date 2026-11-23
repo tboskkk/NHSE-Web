@@ -5,7 +5,7 @@
 
 ## State
 - **main**: foundation complete (see below), 81 tests at that point.
-- **main** (origin/main = 436c04c + this doc commit locally): foundation, map viewer P1, map item editor P2a, all merged and pushed. Specs/plans under `docs/superpowers/{specs,plans}/` (`2026-11-22-map-editor-items-*`). Next: P2c terrain (each own brainstorm/spec/plan), spike S, villagers/collections. 219 unit tests + 4 e2e pass with `NHSE_TEST_SAVE`.
+- **main** (origin/main = 436c04c + this doc commit locally): foundation, map viewer P1, map item editor P2a, all merged and pushed. Specs/plans under `docs/superpowers/{specs,plans}/` (`2026-11-22-map-editor-items-*`). P2b buildings and P2c terrain are done locally (see their sections). Next: spike S, villagers/collections. 259 unit tests + 5 e2e pass with `NHSE_TEST_SAVE`.
 - **Spike S (personal sprite pipeline) not started**: decode a model from `~/Games/ACNH/romfs` (zstd `.zs`, BFRES) and render a top-down/iso PNG named `NNNNN_V.png` into git-ignored `personal-sprites/`; import via the Map page. Never commit Nintendo art. Time-boxed, no product code.
 
 ## Resume commands
@@ -48,5 +48,13 @@ bun run gen:data                                       # regenerates generated/*
 - Tests: 219 unit/golden + 4 e2e pass with `NHSE_TEST_SAVE`. Set `TMPDIR` to a roomy dir for test runs: golden/e2e tests leave 23 MB copies of the save in the temp dir.
 - Known gaps: single-instance/bridge/incline/ground rules are inferred, not game-verified; subType/typeArg/bit are free; Airport cannot be moved along the shore (strict ground rule); building sprites are still colored boxes; real mouse drag untested outside headless.
 
+## P2c terrain brush (done, local commits, not pushed)
+- **Op:** `terrainEdit { label, changes: {x, y, tile}[] }` (`packages/core/src/map/applyTerrainEdit.ts`); x/y are terrain tiles (112x96), tile = the 7 u16 fields, index `96*x+y`, 14-byte records at `landMakingMap`. `planTerrainEdit` is pure and atomic. Rules: tile in a dynamic acre (`staticClassAt` in `ground.ts`), a *changed* ground or road triple must be in the observed table, a changed elevation must lie in the observed range of the ground's `classifyUnit` class, and no tile that was land may become water/cliff/blocked under an item, a building (except types 26/27) or the plaza (pre-existing non-land is ignored). Duplicate coordinates: last wins; equal tiles produce no write and no history entry.
+- **Observed table:** `packages/core/src/generated/terrain-observed.json`, built by `bun run gen:terrain [--merge] <saveDir>...` (default `$NHSE_TEST_SAVE`). The example save has **no roads** (only road triple 0,0,0), so no road can be placed until another save is scanned with `--merge`. Rare valid tiles are refused until a save with them is scanned.
+- **Oracle:** `reference/Commands/TerrainEdit.cs` (via `edit`; change may carry `rotate: true` for upstream `TryRotate`), byte-identical golden `tests/golden/terrainEdit.test.ts` (ground stamp, elevation, rotate, batch; no road ops).
+- **Worker/viewer:** `api.terrainPlan(op)`; edit/undo/redo return `terrain` (`TerrainTouched[]`); the worker reuses one parsed map (`planMap`) for building and terrain plans; `MapStore.patchTerrain` + `terrainVersion`, `MapScene.invalidateTerrain` (re-renders the terrain texture), `onTerrainTouched` in `state.svelte.ts`. UI: `app/src/map/terrainTool.ts` (pure builders: stamp, elevation, rotate, clear road), `TerrainPanel.svelte`, "Terrain" tool (key T) in `MapToolbar`/`MapSection`; `MapView` takes `paintGrid` ("terrain" reports terrain-tile coordinates).
+- Tests: 259 unit/golden + 5 e2e pass with `NHSE_TEST_SAVE` (`tests/e2e/terrainEdit.spec.ts` uses canvas screenshots to prove redraw, undo/redo and reload).
+- Known gaps: observed-set width and no roads (above); no autotiling (a stamped tile may sit beside mismatched neighbours; in-game acceptance untested); static-acre tiles are not editable; no elevation overlay; stroke ghost shows only the hovered tile; manual look at ghost colours not done.
+
 ## Next
-P2c terrain (own brainstorm/spec/plan), spike S (personal sprite pipeline, time-boxed), villagers/collections later.
+Spike S (personal sprite pipeline, time-boxed), villagers/collections later. Optional: scan more saves for terrain-observed.json (roads).
