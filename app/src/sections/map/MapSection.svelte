@@ -19,6 +19,7 @@
   import { createStroke, type Stroke, type Tool } from "../../map/tools";
   import { createSpriteSource } from "../../map/spriteSource";
   import { importPack, packStore } from "../../map/spritePack";
+  import { isModelPack, type LoadedModels, modelPackStore, parseModelPack } from "../../map3d/modelPack";
 
   const base = import.meta.env.BASE_URL;
   const LABELS: [LayerId, string][] = [["terrain", "Terrain"], ["items0", "Items (layer 1)"], ["items1", "Items (layer 2)"], ["buildings", "Buildings"], ["grid", "Acre grid"]];
@@ -31,6 +32,7 @@
   let packUrls = $state.raw(new Map<string, string>());
   let sprites = $derived(createSpriteSource(packUrls, ITEM_COUNT, base));
   let token = 0;
+  let models = $state.raw<LoadedModels | null>(null);
 
   // ---- edit mode ----
   let mode = $state<"view" | "edit">("view");
@@ -347,6 +349,7 @@
 
   onMount(() => {
     packStore.load().then((e) => { if (e.size) setPack(e); });
+    modelPackStore.load().then((e) => { if (e.size) restoreModels([...e].map(([name, data]) => ({ name, data }))); });
     return () => { for (const u of packUrls.values()) URL.revokeObjectURL(u); };
   });
 
@@ -362,6 +365,14 @@
       } else {
         for (const f of list) files.push({ name: (f as File & { webkitRelativePath?: string }).webkitRelativePath || f.name, data: new Uint8Array(await f.arrayBuffer()) });
       }
+      if (isModelPack(files)) {
+        const r = parseModelPack(files);
+        if (r.models.size === 0) { showToast(`The model pack has no usable models (${r.skipped} skipped).`); return; }
+        await modelPackStore.save(new Map(files.map((f) => [f.name, f.data])));
+        models = r;
+        showToast(`Imported ${r.models.size} models${r.skipped ? ` (${r.skipped} skipped)` : ""}.`);
+        return;
+      }
       const { entries, skipped } = importPack(files);
       if (entries.size === 0) { showToast(`No sprites found (expected NNNNN_V.png files); ${skipped} file(s) skipped.`); return; }
       await packStore.save(entries);
@@ -372,8 +383,14 @@
     }
   }
 
+  function restoreModels(files: { name: string; data: Uint8Array }[]) {
+    try { models = parseModelPack(files); } catch { models = null; }
+  }
+
   async function clearPack() {
     await packStore.clear();
+    await modelPackStore.clear();
+    models = null;
     setPack(new Map());
   }
 
@@ -402,9 +419,10 @@
     </fieldset>
     <div class="pack">
       <span class="muted" data-testid="sprite-status">sprites: {packUrls.size} loaded</span>
+      <span class="muted" data-testid="model-status">models: {models?.models.size ?? 0} loaded</span>
       <label class="btn">Import folder<input type="file" webkitdirectory multiple hidden onchange={onpick} /></label>
       <label class="btn">Import .zip<input type="file" accept=".zip" hidden onchange={onpick} /></label>
-      <button onclick={clearPack} disabled={packUrls.size === 0}>Clear</button>
+      <button onclick={clearPack} disabled={packUrls.size === 0 && !models}>Clear</button>
     </div>
   </div>
   {#if error}

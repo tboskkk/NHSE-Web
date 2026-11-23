@@ -31,10 +31,9 @@ export interface PackStore {
 
 const DB = "nhse-web";
 const STORE = "sprites";
-const KEY = "pack";
 
 /** IndexedDB-backed store; any IndexedDB failure degrades to an in-memory copy for this session. */
-export function createPackStore(idb: IDBFactory | undefined = globalThis.indexedDB): PackStore {
+export function createPackStore(idb: IDBFactory | undefined = globalThis.indexedDB, key = "pack"): PackStore {
   let memory = new Map<string, Uint8Array>();
   let broken = idb === undefined;
 
@@ -63,7 +62,7 @@ export function createPackStore(idb: IDBFactory | undefined = globalThis.indexed
       memory = new Map(entries);
       if (broken) return;
       try {
-        await run("readwrite", (s) => s.put(entries, KEY));
+        await run("readwrite", (s) => s.put(entries, key));
       } catch {
         broken = true;
       }
@@ -71,7 +70,7 @@ export function createPackStore(idb: IDBFactory | undefined = globalThis.indexed
     async load() {
       if (!broken) {
         try {
-          const v = await run<Map<string, Uint8Array> | undefined>("readonly", (s) => s.get(KEY));
+          const v = await run<Map<string, Uint8Array> | undefined>("readonly", (s) => s.get(key));
           if (v) memory = v;
         } catch {
           broken = true;
@@ -83,7 +82,7 @@ export function createPackStore(idb: IDBFactory | undefined = globalThis.indexed
       memory = new Map();
       if (broken) return;
       try {
-        await run("readwrite", (s) => s.delete(KEY));
+        await run("readwrite", (s) => s.delete(key));
       } catch {
         broken = true;
       }
