@@ -10,3 +10,9 @@ test-results/
 playwright-report/
 *.tsbuildinfo
 personal-sprites/
+scripts/spike-s/w/
+scripts/spike-s/**/bin/
+scripts/spike-s/**/obj/
+scripts/spike-s/bcsv/*.tsv
+scripts/spike-s/*.png
+__pycache__/
