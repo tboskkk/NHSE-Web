@@ -24,3 +24,10 @@ t("loadPlantFile dumps the cosmos models, their materials' texture names and the
 t("loadPlantFile rejects a file that does not exist", async () => {
   await expect(loadPlantFile(ROMFS!, "PltDoesNotExist")).rejects.toThrow();
 });
+
+t("loadPlantFile accepts a family file that has no textures of its own", async () => {
+  const f = await loadPlantFile(ROMFS!, "FldUnitRiver");
+  expect(f.textures).toEqual([]);
+  expect(f.models.length).toBe(45);
+  expect(f.models.map((m) => m.name)).toContain("River1A_0");
+}, 120_000);

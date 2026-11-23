@@ -1,4 +1,4 @@
-import { mkdtempSync, readFileSync, rmSync } from "node:fs";
+import { existsSync, mkdtempSync, readFileSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { type BntxTexture, parseBntx } from "../sprites/bntx";
@@ -21,8 +21,8 @@ export async function loadPlantFile(romfs: string, file: string): Promise<{ mode
     await Bun.write(join(dir, "in.bfres"), entry[1]);
     await runHelper(["bfres-models", join(dir, "in.bfres"), join(dir, "out")]);
     const models = (JSON.parse(readFileSync(join(dir, "out", "models.json"), "utf8")) as { models: DumpedModel[] }).models;
-    const bntx = readFileSync(join(dir, "out", "textures.bntx"));
-    return { models, textures: parseBntx(new Uint8Array(bntx)) };
+    const bntxPath = join(dir, "out", "textures.bntx"); // family files (terrain pieces) have none
+    return { models, textures: existsSync(bntxPath) ? parseBntx(new Uint8Array(readFileSync(bntxPath))) : [] };
   } finally {
     rmSync(dir, { recursive: true, force: true });
   }
