@@ -12,10 +12,12 @@
   "dependencies": {
     "@nhse/core": "workspace:*",
     "@nhse/io": "workspace:*",
-    "pixi.js": "8.23.0"
+    "pixi.js": "8.23.0",
+    "three": "0.180.0"
   },
   "devDependencies": {
     "@sveltejs/vite-plugin-svelte": "^5.0.0",
+    "@types/three": "0.180.0",
     "svelte": "^5.0.0",
     "svelte-check": "^4.7.8",
     "vite": "^6.0.0"
