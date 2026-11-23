@@ -1,4 +1,4 @@
-import type { BuildingEditOp, BuildingInfo, EditOp, MapData, SaveFiles } from "@nhse/core";
+import type { BuildingEditOp, BuildingInfo, EditOp, MapData, SaveFiles, TerrainEditOp, TerrainTileValue } from "@nhse/core";
 
 export type LoadResult = {
   island: string;
@@ -37,8 +37,10 @@ export type MapView = MapData & { revisionLabel: string };
 export type Touched = { layer: 0 | 1; index: number; raw: string };
 /** Buildings and plaza as currently stored; sent only when an edit/undo/redo patch overlapped their bytes. */
 export type Structures = { buildings: BuildingInfo[]; plaza: { x: number; z: number } };
-export type EditResult = { change: string | null; history: string[]; touched: Touched[]; structures: Structures | null };
-export type HistoryResult = { label: string | null; touched: Touched[]; structures: Structures | null };
+/** A terrain tile that changed: column-major index (96 * x + y) and its current seven fields. */
+export type TerrainTouched = { index: number; tile: TerrainTileValue };
+export type EditResult = { change: string | null; history: string[]; touched: Touched[]; structures: Structures | null; terrain: TerrainTouched[] };
+export type HistoryResult = { label: string | null; touched: Touched[]; structures: Structures | null; terrain: TerrainTouched[] };
 
 type Tile = { x: number; y: number };
 export type PlanRequest =
@@ -82,6 +84,8 @@ export interface Api {
   mapPlan(req: PlanRequest): Promise<PlanResult>;
   /** Plans a building edit against the current save without editing; `reason` is the refusal message. */
   buildingPlan(op: BuildingEditOp): Promise<{ ok: true } | { ok: false; reason: string }>;
+  /** Validates a terrain edit without applying it. */
+  terrainPlan(op: TerrainEditOp): Promise<{ ok: true } | { ok: false; reason: string }>;
   /** Display name for a 16-digit hex raw item value in the loaded language. */
   itemName(raw: string): Promise<string>;
 }

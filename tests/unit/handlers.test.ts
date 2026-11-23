@@ -264,3 +264,59 @@ goldenTest("buildingPlan sees edits, undo and redo (cached map is invalidated)",
   expect(await overlaps()).toBe(true);
   expect(b.type).not.toBe(0);
 });
+
+// ---- terrain ----
+async function terrainStamp(api: Awaited<ReturnType<typeof fresh>>["api"]) {
+  const m = await api.map();
+  const H = m.terrain.height;
+  const keys = (await import("../../packages/core/src/generated/terrain-observed.json")).default.ground;
+  const [gm, gv, ga] = Object.keys(keys).find((k) => k !== "0,0,0")!.split(",").map(Number) as [number, number, number];
+  for (let x = 0; x < m.terrain.width; x++)
+    for (let y = 0; y < H; y++) {
+      const i = H * x + y;
+      if (m.terrain.unitModel[i] !== 0) continue;
+      const tile = { unitModel: gm, variation: gv, angle: ga, roadModel: 0, roadVariation: 0, roadAngle: 0, elevation: m.terrain.elevation[i]! };
+      const op = { op: "terrainEdit" as const, label: "Stamp terrain", changes: [{ x, y, tile }] };
+      if ((await api.terrainPlan(op)).ok) return { op, index: i, tile };
+    }
+  throw new Error("no stampable terrain tile");
+}
+
+goldenTest("edit(terrainEdit) reports touched terrain; undo and redo report old and new; other edits report none", async () => {
+  const { api } = await fresh();
+  const { op, index, tile } = await terrainStamp(api);
+  const e = await api.edit(op);
+  expect(e.terrain).toEqual([{ index, tile }]);
+  expect(e.touched).toEqual([]);
+  expect(e.structures).toBeNull();
+  const u = await api.undo();
+  expect(u.terrain).toEqual([{ index, tile: { ...tile, unitModel: 0, variation: 0, angle: 0 } }]);
+  expect((await api.redo()).terrain).toEqual([{ index, tile }]);
+  expect((await api.edit({ op: "wallet", player: 0, value: 12 })).terrain).toEqual([]);
+});
+
+goldenTest("terrainPlan reports the refusal reason and never dirties the save", async () => {
+  const { api } = await fresh();
+  const bad = await api.terrainPlan({ op: "terrainEdit", label: "x", changes: [{ x: 0, y: 0, tile: { unitModel: 999, variation: 9, angle: 9, roadModel: 0, roadVariation: 0, roadAngle: 0, elevation: 0 } }] });
+  expect(bad.ok).toBe(false);
+  expect((await terrainStamp(api)).op.op).toBe("terrainEdit");
+  expect((await api.build("changed")).size).toBe(0);
+});
+
+goldenTest("plans see terrain edits, undo and redo (cached map is invalidated)", async () => {
+  const { api } = await fresh();
+  const { op, index } = await terrainStamp(api);
+  const m = await api.map();
+  const H = m.terrain.height;
+  const x = Math.floor(index / H), y = index % H;
+  // slot 5 moved onto the stamped tile: refused as water only when the cached map has the new terrain
+  const onTile = { op: "buildingEdit" as const, label: "x", changes: [{ slot: 5, building: { ...m.buildings[5]!, x: 2 * (x + 16), y: 2 * (y + 16) } }] };
+  const water = async () => { const r = await api.buildingPlan(onTile); return !r.ok && /water/.test(r.reason); };
+  expect(await water()).toBe(false); // primes the cache
+  await api.edit(op);
+  expect(await water()).toBe(true);
+  await api.undo();
+  expect(await water()).toBe(false);
+  await api.redo();
+  expect(await water()).toBe(true);
+});

@@ -1,14 +1,14 @@
 import {
-  applyOp, BUILDING_COUNT, BUILDING_SIZE, describeOp, planBuildingEdit, EditSession, GameStrings, getKind, getMenuIconSprite, HorizonSave, Item, readMap,
+  applyOp, BUILDING_COUNT, BUILDING_SIZE, describeOp, planBuildingEdit, planTerrainEdit, terrainTileAt, EditSession, GameStrings, getKind, getMenuIconSprite, HorizonSave, Item, readMap,
   planErase, planPlace, planRect, planRemoveWhere, planReplaceAll, planToOp, WEED_IDS,
-  type BuildingEditOp, type Change, type EditOp, type ItemArea, type MapData, type Plan, type SaveFiles,
+  type BuildingEditOp, type Change, type EditOp, type ItemArea, type MapData, type Plan, type SaveFiles, type TerrainEditOp,
 } from "@nhse/core";
-import type { Api, ItemView, PlanRequest, PlanResult, PlayerView, Structures, Touched } from "./protocol";
+import type { Api, ItemView, PlanRequest, PlanResult, PlayerView, Structures, TerrainTouched, Touched } from "./protocol";
 
 const clone = (files: SaveFiles): SaveFiles => new Map([...files].map(([k, v]) => [k, v.slice()]));
 const hex16 = (raw: bigint) => raw.toString(16).padStart(16, "0");
 
-const hasMapEdit = (op: EditOp): boolean => op.op === "mapEdit" || op.op === "buildingEdit" || (op.op === "batch" && op.ops.some(hasMapEdit));
+const hasMapEdit = (op: EditOp): boolean => op.op === "mapEdit" || op.op === "buildingEdit" || op.op === "terrainEdit" || (op.op === "batch" && op.ops.some(hasMapEdit));
 
 export function createApi(fetcher: (path: string) => Promise<unknown>, fetchBytes: (path: string) => Promise<Uint8Array> = async () => { throw new Error("Map data is not available."); }): Api {
   let save: HorizonSave | null = null;
@@ -67,6 +67,21 @@ export function createApi(fetcher: (path: string) => Promise<unknown>, fetchByte
   /** Parsed map reused between plan requests; dropped whenever the save bytes can change. */
   let mapCache: MapData | null = null;
   const planMap = (sav: HorizonSave): MapData => (mapCache ??= readMap(sav.main.data, sav.revision));
+
+  /** Terrain tiles whose 14-byte records a change touched, with their current values. */
+  const terrainTouchedBy = (change: Change | null): TerrainTouched[] => {
+    if (!save || !change) return [];
+    const base = save.revision.mainOffsets.landMakingMap;
+    const end = base + 112 * 96 * 14;
+    const seen = new Set<number>();
+    for (const p of change.patches) {
+      if (p.path !== save.main.path) continue;
+      for (let b = Math.max(p.offset, base); b < Math.min(p.offset + p.after.length, end); b++) seen.add(Math.floor((b - base) / 14));
+    }
+    if (seen.size === 0) return [];
+    const map = planMap(save);
+    return [...seen].sort((a, b) => a - b).map((index) => ({ index, tile: terrainTileAt(map, index) }));
+  };
 
   const need = () => {
     if (!save || !session || !strings) throw new Error("No save is loaded.");
@@ -141,24 +156,34 @@ export function createApi(fetcher: (path: string) => Promise<unknown>, fetchByte
       const label = describeOp(save, strings, op);
       mapCache = null;
       const change = session.apply(label, (s) => applyOp(s, op, env));
-      return { change: change ? change.label : null, history: session.changes.map((c) => c.label), touched: touchedBy(change), structures: structuresBy(change) };
+      return { change: change ? change.label : null, history: session.changes.map((c) => c.label), touched: touchedBy(change), structures: structuresBy(change), terrain: terrainTouchedBy(change) };
     },
 
     async undo() {
       mapCache = null;
       const c = need().session.undo();
-      return { label: c?.label ?? null, touched: touchedBy(c), structures: structuresBy(c) };
+      return { label: c?.label ?? null, touched: touchedBy(c), structures: structuresBy(c), terrain: terrainTouchedBy(c) };
     },
     async redo() {
       mapCache = null;
       const c = need().session.redo();
-      return { label: c?.label ?? null, touched: touchedBy(c), structures: structuresBy(c) };
+      return { label: c?.label ?? null, touched: touchedBy(c), structures: structuresBy(c), terrain: terrainTouchedBy(c) };
     },
 
     async buildingPlan(op: BuildingEditOp) {
       const { save } = need();
       try {
         planBuildingEdit({ map: planMap(save), acreTiles: await acreTiles() }, op);
+        return { ok: true as const };
+      } catch (e) {
+        return { ok: false as const, reason: e instanceof Error ? e.message : String(e) };
+      }
+    },
+
+    async terrainPlan(op: TerrainEditOp) {
+      const { save } = need();
+      try {
+        planTerrainEdit({ map: planMap(save), acreTiles: await acreTiles() }, op);
         return { ok: true as const };
       } catch (e) {
         return { ok: false as const, reason: e instanceof Error ? e.message : String(e) };
