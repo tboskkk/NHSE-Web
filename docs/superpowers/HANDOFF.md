@@ -58,7 +58,7 @@ bun run gen:data                                       # regenerates generated/*
 
 ## Personal sprite tool (done, local commits)
 - `bun run gen:sprites --romfs ~/Games/ACNH/romfs [--out personal-sprites] [--only id|model] [--jobs 4]` (build the helper once: `dotnet build scripts/sprites/dotnet -c Release`). Code in `scripts/sprites/` (container zstd/SARC, bntx, raster, png, itemParam, romfs, render, run, cli); C# helper `scripts/sprites/dotnet/` does BCSV and BFRES only. Spec/plan: `docs/superpowers/{specs,plans}/2026-11-22-personal-sprite-tool-*`.
-- Output: top-down albedo sprites on footprint-sized canvases (32 px per footprint tile, `UNITS_PER_TILE = 5` model units per tile, measured), orientation 0, no lighting. Resumable (existing files skipped); `report.json` in the output dir.
+- Output: top-down albedo sprites on footprint-sized canvases (32 px per footprint tile, `UNITS_PER_TILE = 5` model units per tile, measured), orientation 0, no lighting. Resumable (existing files skipped); `<out>.report.json` next to the output dir (not inside it: the Map page import counts non-sprite files as skipped).
 - First full run: 6224 sprites in ~3 min (jobs 8), 0 render failures, 1526 items skipped as "no ReBody variants" (their variants are not ReBody-based). `importPack` accepts all 6225 files (1.9 MB). Eyeballed a contact sheet only; import in a real browser not done.
 - Tests: `NHSE_TEST_ROMFS=~/Games/ACNH/romfs` enables the romfs-gated tests (294 pass with `NHSE_TEST_SAVE` too). Unit tests use synthetic fixtures (`tests/unit/spriteFixtures.ts`).
 - Not covered: non-Ftr items, items without ReBody variants, fabric/pattern variants, per-material textures, rotation, lighting/Normal/Mix maps, several `_Alb` textures (first used; none seen).

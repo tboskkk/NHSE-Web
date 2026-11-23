@@ -55,7 +55,7 @@ test("runAll records per-item failures and still renders the rest", async () => 
   expect(r).toMatchObject({ rendered: 2, skipped: 2, existing: 0, reasons: { "no mesh": 1, "no ReBody variants": 1 } });
   expect(existsSync(join(out, "00770_0.png")) && existsSync(join(out, "00770_1.png"))).toBe(true);
   expect(existsSync(join(out, "00771_0.png"))).toBe(false);
-  expect(JSON.parse(readFileSync(join(out, "report.json"), "utf8")).items["771_0"]).toBe("no mesh");
+  expect(JSON.parse(readFileSync(`${out}.report.json`, "utf8")).items["771_0"]).toBe("no mesh");
 });
 
 test("runAll is resumable: existing sprites are not re-rendered and the report stays complete", async () => {

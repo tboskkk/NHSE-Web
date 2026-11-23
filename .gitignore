@@ -18,3 +18,4 @@ scripts/spike-s/*.png
 __pycache__/
 scripts/sprites/dotnet/bin/
 scripts/sprites/dotnet/obj/
+personal-sprites.report.json

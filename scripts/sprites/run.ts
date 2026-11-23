@@ -45,6 +45,6 @@ export async function runAll(opts: RunOptions, src: Source): Promise<Report> {
     }
   };
   await Promise.all(Array.from({ length: Math.max(1, opts.jobs) }, worker));
-  writeFileSync(join(opts.out, "report.json"), JSON.stringify(report, null, 1));
+  writeFileSync(`${opts.out}.report.json`, JSON.stringify(report, null, 1));
   return report;
 }
