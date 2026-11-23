@@ -1,12 +1,12 @@
-# Handoff — NHSE-Web (foundation, map viewer and map item editor P2a all merged to main and pushed)
+# Handoff — NHSE-Web (main is current and pushed; see State)
 
 **Repo:** https://github.com/tboskkk/NHSE-Web (public) · **Live app:** https://tboskkk.github.io/NHSE-Web/ · **Branch:** `main` only (feature branches merged and deleted)
 **Plan/spec (done):** `docs/superpowers/plans/2026-11-22-nhse-web-foundation.md`, `docs/superpowers/specs/2026-11-22-nhse-web-foundation-design.md`
 
 ## State
-- **main**: foundation complete (see below), 81 tests at that point.
-- **main** (origin/main = d59ff88, pushed 2026-11-22): foundation, map viewer P1, items P2a, buildings P2b, terrain P2c, all pushed. Specs/plans under `docs/superpowers/{specs,plans}/` (`2026-11-22-map-editor-items-*`). Next: personal sprite tool (from spike S), villagers/collections. 261 unit tests + 5 e2e pass with `NHSE_TEST_SAVE`.
-- **Spike S (personal sprite pipeline) DONE, answer = yes** (see `scripts/spike-s/README.md`, uncommitted throwaway code; output goes to git-ignored `personal-sprites/`, never commit it). One model -> top-down `NNNNN_V.png` works end to end on 8 chairs and `importPack` accepts them. Recommendation: build it as a real offline tool (own brainstorm/spec/plan), first scope all `Ftr*` items with `ReBody` variants.
+- **main = origin/main (00a5522 at the time of writing), all pushed and deployed.** Done: foundation, map viewer, item/building/terrain editors (2D), personal sprite tool (`gen:sprites`), 3D viewer, 3D editing, 3D natural-item models and 3D terrain pieces (`gen:models`), and the Map editor UI pass. Specs/plans are under `docs/superpowers/{specs,plans}/` (one pair per feature, dated 2026-11-22/23). Latest counts: 404 unit/golden tests and 11 e2e tests pass with `NHSE_TEST_SAVE`, `NHSE_TEST_ROMFS` and a built .NET helper.
+- Sections below are per-feature notes, oldest first; the newest are "Map 3D ...", "Map editor UI pass" and "Next". The old "Spike S" notes are obsolete (that code was productised into `scripts/sprites/` and removed).
+- Never commit `example-save-file/`, `personal-sprites/`, `personal-models/` (or their `.report.json`) or any Nintendo art. Personal romfs dump: `~/Games/ACNH/romfs`.
 
 ## Resume commands
 ```
