@@ -1,7 +1,10 @@
 import observed from "../generated/terrain-observed.json";
 import type { Revision } from "../save/revisions";
-import { TERRAIN_ORIGIN_TILES } from "./geometry";
-import { classifyUnit, staticClassAt, type UnitClass } from "./ground";
+import { isNone } from "./footprint";
+import { BUILDING_ITEM_TILES, itemToWorld, PLAZA_ITEM_TILES, TERRAIN_ORIGIN_TILES } from "./geometry";
+import { classifyUnit, groundAt, staticClassAt, type UnitClass } from "./ground";
+import { skipsGroundRule } from "./buildingTypes";
+import { groundReason } from "./placement";
 import type { MapData } from "./mapData";
 import type { PlaceCtx } from "./placement";
 import { TERRAIN_TILE_SIZE } from "./terrainTile";
@@ -68,7 +71,39 @@ export function planTerrainEdit(ctx: PlaceCtx, op: TerrainEditOp): TerrainWrite[
     }
     out.push({ index, tile: next });
   }
+  strandCheck(ctx, out);
   return out;
+}
+
+/** Refuses writes that turn land into non-land under an item, building or the plaza (pre-existing non-land is ignored). */
+function strandCheck(ctx: PlaceCtx, writes: TerrainWrite[]): void {
+  if (writes.length === 0) return;
+  const { map } = ctx;
+  const t = map.terrain;
+  const after: PlaceCtx = { ...ctx, map: { ...map, terrain: { ...t, unitModel: t.unitModel.slice() } } };
+  for (const w of writes) after.map.terrain.unitModel[w.index] = w.tile.unitModel;
+  const acreW = map.items[0].width / 32;
+  const origin = itemToWorld(acreW, 0, 0);
+  const { width: W, height: H } = map.items[0];
+  for (const w of writes) {
+    const tx = Math.floor(w.index / t.height), ty = w.index % t.height;
+    for (let dx = 0; dx < 2; dx++)
+      for (let dy = 0; dy < 2; dy++) {
+        const wx = 2 * (tx + TERRAIN_ORIGIN_TILES) + dx, wy = 2 * (ty + TERRAIN_ORIGIN_TILES) + dy;
+        const ix = wx - origin.x, iy = wy - origin.y;
+        if (ix < 0 || iy < 0 || ix >= W || iy >= H) continue;
+        if (groundAt(ctx, ix, iy) !== "land") continue;
+        const g = groundAt(after, ix, iy);
+        if (g === "land") continue;
+        const why = `would stand on ${groundReason(g)}`;
+        for (let l = 0; l < 2; l++) if (!isNone(map.items[l]!.raw[H * ix + iy]!)) throw new RangeError(`item (layer ${l + 1}) at (${ix}, ${iy}) ${why}`);
+        map.buildings.forEach((b, slot) => {
+          if (b.type !== 0 && !skipsGroundRule(b.type) && wx >= b.x && wx < b.x + BUILDING_ITEM_TILES && wy >= b.y && wy < b.y + BUILDING_ITEM_TILES) throw new RangeError(`building in slot ${slot} ${why}`);
+        });
+        const p = map.plaza;
+        if (wx >= p.x && wx < p.x + PLAZA_ITEM_TILES.w && wy >= p.z && wy < p.z + PLAZA_ITEM_TILES.h) throw new RangeError(`the plaza ${why}`);
+      }
+  }
 }
 
 /** Writes planned tiles into main.dat bytes (14-byte records, u16 LE fields, column-major); untouched records keep their bytes. */

@@ -97,6 +97,58 @@ test("writeTerrain patches only changed records in the 14-byte LE layout", () =>
   expect(buf.slice(100 + 14 * (96 * 2 + 4)).every((b) => b === 0)).toBe(true);
 });
 
+// ---- cross-check against items, buildings, plaza ----
+// terrain (20,30) = world item tiles x 72..73, y 92..93 = item layer x 72..73, y 60..61 (9-wide item area, origin x 0)
+const ITEM = 0x1234n;
+const onItem = (ctx = ctxOf(), x = 72, y = 60) => {
+  ctx.map.items[0].raw[192 * x + y] = ITEM;
+  return ctx;
+};
+const RIVER = NONBASE; // model 11 classifies as river (water)
+
+test("stamping water under an item is refused naming the item", () => {
+  expect(() => planTerrainEdit(onItem(), op([at(20, 30, RIVER)]))).toThrow(/item \(layer 1\) at \(72, 60\) would stand on water/);
+});
+
+test("stamping water under a building names its slot", () => {
+  const ctx = ctxOf();
+  ctx.map.buildings[3] = { type: 21, x: 72, y: 92, angle: 0, bit: 0, subType: 0, typeArg: 0, uniqueId: 3 };
+  expect(() => planTerrainEdit(ctx, op([at(20, 30, RIVER)]))).toThrow(/building in slot 3 would stand on water/);
+});
+
+test("stamping water under the plaza names the plaza", () => {
+  const ctx = ctxOf();
+  ctx.map.plaza = { x: 72, z: 92 };
+  expect(() => planTerrainEdit(ctx, op([at(20, 30, RIVER)]))).toThrow(/the plaza would stand on water/);
+});
+
+test("an item already on non-land does not block an unrelated or same-class stamp", () => {
+  const ctx = onItem(ctxOf(), 74, 60); // under terrain (21,30)
+  ctx.map.terrain.unitModel[96 * 21 + 30] = gm; // already water
+  expect(planTerrainEdit(ctx, op([at(21, 30, { ...RIVER, variation: gv + 1 > 3 ? 0 : gv + 1 })]))).toHaveLength(1);
+  expect(planTerrainEdit(ctx, op([at(20, 30, RIVER)]))).toHaveLength(1); // no item over (20,30)
+});
+
+test("making a tile land never blocks", () => {
+  const ctx = onItem();
+  ctx.map.terrain.unitModel[96 * 20 + 30] = gm;
+  expect(planTerrainEdit(ctx, op([at(20, 30, FLAT)]))).toHaveLength(1);
+});
+
+test("terrain-to-item mapping with a 7-wide item area (origin x = 32)", () => {
+  const mk = () => {
+    const ctx = ctxOf();
+    ctx.map.items = ctx.map.items.map((l) => ({ ...l, width: 224, raw: new BigUint64Array(224 * 192).fill(0xfffen) })) as typeof ctx.map.items;
+    return ctx;
+  };
+  const hit = mk();
+  hit.map.items[0].raw[192 * 40 + 60] = ITEM; // world x 72
+  expect(() => planTerrainEdit(hit, op([at(20, 30, RIVER)]))).toThrow(/item \(layer 1\) at \(40, 60\) would stand on water/);
+  const miss = mk();
+  miss.map.items[0].raw[192 * 72 + 60] = ITEM; // world x 104, a different terrain tile
+  expect(planTerrainEdit(miss, op([at(20, 30, RIVER)]))).toHaveLength(1);
+});
+
 goldenTest("terrainEdit through applyOp is one undo step and undo restores the bytes", async () => {
   const sav = await HorizonSave.load(readDir(SAVE!));
   const acreTiles = new Uint8Array(readFileSync(join(REPO, "app/public/data/acretiles.bin")));
