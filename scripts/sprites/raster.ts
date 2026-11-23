@@ -3,8 +3,11 @@
 export type Shape = { pos: number[]; uv: number[]; idx: number[] };
 export type Texture = { rgba: Uint8Array; width: number; height: number };
 
-/** Model units per footprint tile; calibrated in Task 5 (see cli). */
-export const UNITS_PER_TILE = 1;
+/**
+ * Model units per footprint tile. Measured over 40 Ftr models with known footprints: items that fill their
+ * footprint (pergola, lighted display stand, round topiary) are exactly 5.0 units per tile wide.
+ */
+export const UNITS_PER_TILE = 5;
 
 export function modelBounds(shapes: Shape[]): { minX: number; maxX: number; minZ: number; maxZ: number } | null {
   let b: { minX: number; maxX: number; minZ: number; maxZ: number } | null = null;

@@ -125,3 +125,9 @@ export function buildBntx(textures: FixtureTexture[]): Uint8Array {
   });
   return out;
 }
+
+/** A 4x4 BC1 texture of one solid colour (RGB565 `c0`), swizzled, as `BntxTexture` data. */
+export function solidBc1(name: string, c0: number, format = 0x1a06): FixtureTexture {
+  const block = Uint8Array.of(c0 & 255, c0 >> 8, 0, 0, 0, 0, 0, 0);
+  return { name, format, width: 4, height: 4, blockHeightLog2: 0, data: swizzle(1, 1, 8, 0, block) };
+}

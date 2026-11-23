@@ -11,7 +11,8 @@
     "build": "cd app && bunx vite build",
     "vectors": "bun scripts/vectors.ts",
     "gen:data": "bun scripts/gen-data.ts",
-    "gen:terrain": "bun scripts/gen-terrain-observed.ts"
+    "gen:terrain": "bun scripts/gen-terrain-observed.ts",
+    "gen:sprites": "bun scripts/sprites/cli.ts"
   },
   "devDependencies": {
     "@playwright/test": "^1.65.1",
