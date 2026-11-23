@@ -12,7 +12,8 @@
     "vectors": "bun scripts/vectors.ts",
     "gen:data": "bun scripts/gen-data.ts",
     "gen:terrain": "bun scripts/gen-terrain-observed.ts",
-    "gen:sprites": "bun scripts/sprites/cli.ts"
+    "gen:sprites": "bun scripts/sprites/cli.ts",
+    "gen:models": "bun scripts/models/cli.ts"
   },
   "devDependencies": {
     "@playwright/test": "^1.65.1",

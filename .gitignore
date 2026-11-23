@@ -19,3 +19,5 @@ __pycache__/
 scripts/sprites/dotnet/bin/
 scripts/sprites/dotnet/obj/
 personal-sprites.report.json
+personal-models/
+personal-models.report.json
