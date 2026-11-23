@@ -8,7 +8,7 @@
   import { screenToTile } from "./tiles";
 
   type Hover = { terrain: { x: number; y: number } | null; item: { x: number; y: number } | null } | null;
-  let { map, acreTiles, sprites, layers, version = 0, structuresVersion = 0, terrainVersion = 0, ghost = null, dim = null, paint = null, onhover, onerror }: {
+  let { map, acreTiles, sprites, layers, version = 0, structuresVersion = 0, terrainVersion = 0, paintGrid = "items", ghost = null, dim = null, paint = null, onhover, onerror }: {
     map: MapData;
     acreTiles: Uint8Array;
     sprites: SpriteSource;
@@ -17,6 +17,8 @@
     version?: number;
     structuresVersion?: number;
     terrainVersion?: number;
+    /** Which grid pointer tiles are reported in while painting: item tiles, or terrain tiles. */
+    paintGrid?: "items" | "terrain";
     ghost?: Ghost | null;
     /** An item layer drawn faded (the one that is not being edited). */
     dim?: LayerId | null;
@@ -90,7 +92,7 @@
     onhover(terrain || item ? { terrain, item } : null);
   }
 
-  const itemTileAt = (sx: number, sy: number) => (scene ? screenToTile(camera, sx, sy, scene.layout.items) : null);
+  const itemTileAt = (sx: number, sy: number) => (scene ? screenToTile(camera, sx, sy, scene.layout[paintGrid]) : null);
 
   function onpointerdown(e: PointerEvent) {
     canvas.setPointerCapture(e.pointerId);

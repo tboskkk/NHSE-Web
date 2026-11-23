@@ -1,6 +1,6 @@
 <script lang="ts">
   import { onMount } from "svelte";
-  import { BUILDING_ITEM_TILES, checkPlacement, footprintTiles, isNone, itemFootprint, Item, ITEM_COUNT, rootOf } from "@nhse/core";
+  import { BUILDING_ITEM_TILES, checkPlacement, footprintTiles, isNone, itemFootprint, itemToWorld, Item, ITEM_COUNT, rootOf, TERRAIN_ORIGIN_TILES, type TerrainEditOp, type TerrainTileValue } from "@nhse/core";
   import { fromZip } from "@nhse/io";
   import { api, app, edit, onMapTouched, onStructuresTouched, onTerrainTouched, showToast } from "../../lib/state.svelte";
   import type { MapView as MapData } from "../../worker/protocol";
@@ -9,6 +9,8 @@
   import Inspector from "../../map/Inspector.svelte";
   import BulkPanel from "../../map/BulkPanel.svelte";
   import BuildingPanel from "../../map/BuildingPanel.svelte";
+  import TerrainPanel from "../../map/TerrainPanel.svelte";
+  import { clearRoadOp, elevationOp, rotateOp, stampOp, terrainTileUnder, type StampPart, type TerrainMode } from "../../map/terrainTool";
   import { addOp, hitTarget, moveOp, reconcileSelection, targetRect, type Target } from "../../map/buildingTool";
   import MapBrush from "../../map/MapBrush.svelte";
   import MapToolbar from "../../map/MapToolbar.svelte";
@@ -51,6 +53,15 @@
   let drag = $state.raw<{ target: Target; grab: { x: number; y: number }; from: { x: number; y: number }; to: { x: number; y: number } } | null>(null);
   let probe = $state.raw<{ key: string; ok: boolean; reason?: string } | null>(null);
   let probeToken = 0;
+  // terrain tool: mode, picked tile, hover (terrain tile coordinates) and the ghost's validity probe
+  let tmode = $state<TerrainMode>("stamp");
+  let tdelta = $state<1 | -1>(1);
+  let tpart = $state<StampPart>("ground");
+  let picked = $state.raw<TerrainTileValue | null>(null);
+  let hoverTerrain = $state.raw<{ x: number; y: number } | null>(null);
+  let tprobe = $state.raw<{ key: string; ok: boolean; reason?: string } | null>(null);
+  let tprobeToken = 0;
+  let tstroke: Stroke | null = null;
   const acreW = $derived(map ? map.items[0].width / 32 : 9);
   const brushName = $derived(brush === 0xfffen ? "nothing" : new Item(brush).itemId.toString());
 
@@ -100,6 +111,66 @@
     void api.buildingPlan(c.op).then((r) => { if (mine === probeToken) probe = r.ok ? { key, ok: true } : { key, ok: false, reason: r.reason }; });
   });
 
+  const terrainOpFor = (tiles: { x: number; y: number }[]): TerrainEditOp | null => {
+    const m = store?.map;
+    if (!m) return null;
+    switch (tmode) {
+      case "stamp": return picked ? stampOp(m, picked, tpart, tiles) : null;
+      case "elevation": return elevationOp(m, tiles, tdelta);
+      case "rotate": return rotateOp(m, tiles);
+      case "clearRoad": return clearRoadOp(m, tiles);
+    }
+  };
+  /** Item-layer rect of one terrain tile (2x2 item tiles). */
+  const terrainRect = (t: { x: number; y: number }) => {
+    const o = itemToWorld(acreW, 0, 0);
+    return { x: 2 * (t.x + TERRAIN_ORIGIN_TILES) - o.x, y: 2 * (t.y + TERRAIN_ORIGIN_TILES) - o.y, w: 2, h: 2 };
+  };
+  const terrainCandidate = $derived.by(() => {
+    void version;
+    if (!editing || tool !== "terrain" || !hoverTerrain) return null;
+    const op = terrainOpFor([hoverTerrain]);
+    return op ? { op, rect: terrainRect(hoverTerrain) } : null;
+  });
+  $effect(() => {
+    const c = terrainCandidate;
+    const mine = ++tprobeToken;
+    if (!c || c.op.changes.length === 0) { tprobe = null; return; }
+    const key = JSON.stringify(c.op);
+    void api.terrainPlan(c.op).then((r) => { if (mine === tprobeToken) tprobe = r.ok ? { key, ok: true } : { key, ok: false, reason: r.reason }; });
+  });
+
+  async function commitTerrain(op: TerrainEditOp) {
+    if (op.changes.length === 0) { showToast("Nothing to change."); return; }
+    try {
+      const r = await api.terrainPlan(op);
+      if (!r.ok) { showToast(r.reason); return; }
+      await edit(op);
+    } catch (e) {
+      showToast(e instanceof Error ? e.message : String(e));
+    }
+  }
+
+  const terrainPaint = {
+    start(t: { x: number; y: number }) {
+      if (tmode === "stamp" && !picked) {
+        picked = store ? terrainTileUnder(store.map, t) : null;
+        return;
+      }
+      tstroke = createStroke("place", 0);
+      tstroke.add(t.x, t.y);
+    },
+    move(t: { x: number; y: number }) { tstroke?.add(t.x, t.y); },
+    end() {
+      const r = tstroke?.done();
+      tstroke = null;
+      if (!r) return;
+      const op = terrainOpFor(r.tiles);
+      if (op) void commitTerrain(op);
+    },
+    cancel() { tstroke = null; },
+  };
+
   const placeCtx = () => (store && acreTiles ? { map: store.map, acreTiles } : null);
 
   const ghost = $derived.by<Ghost | null>(() => {
@@ -109,6 +180,15 @@
     if (stroke && (tool === "rect" || tool === "clearRect")) {
       const r = stroke.rect();
       return r ? { x: r.x0, y: r.y0, w: r.x1 - r.x0 + 1, h: r.y1 - r.y0 + 1, ok: tool === "rect" } : null;
+    }
+    if (tool === "terrain") {
+      const c = terrainCandidate;
+      if (c) {
+        const p = tprobe && tprobe.key === JSON.stringify(c.op) ? tprobe : null;
+        return { ...c.rect, ok: c.op.changes.length > 0 && (p ? p.ok : true), label: c.op.changes.length === 0 ? "nothing to change" : p?.reason };
+      }
+      if (tool === "terrain" && tmode === "stamp" && !picked && hoverTerrain) return { ...terrainRect(hoverTerrain), ok: true, label: "click to pick" };
+      return null;
     }
     if (tool === "building") {
       const c = candidate;
@@ -135,7 +215,7 @@
     }
     return { x: h.x, y: h.y, w: 1, h: 1, ok: true };
   });
-  $effect(() => { status = ghost && !ghost.ok && ghost.label ? `Cannot ${tool === "building" ? "move or add" : "place"} here: ${ghost.label}` : ""; });
+  $effect(() => { status = ghost && !ghost.ok && ghost.label ? `Cannot ${tool === "building" ? "move or add" : tool === "terrain" ? "edit terrain" : "place"} here: ${ghost.label}` : ""; });
 
   async function finish(r: NonNullable<ReturnType<Stroke["done"]>>) {
     const ctx = placeCtx();
@@ -208,6 +288,8 @@
   const paint = $derived(
     editing && tool === "building"
       ? buildingPaint
+      : editing && tool === "terrain"
+      ? terrainPaint
       : editing
       ? {
           start(t: { x: number; y: number }) {
@@ -231,7 +313,7 @@
   function onkey(e: KeyboardEvent) {
     if (!editing || e.ctrlKey || e.metaKey || e.altKey) return;
     if ((e.target as HTMLElement | null)?.matches?.("input, textarea, select, [contenteditable]")) return;
-    const k = ({ p: "place", e: "erase", r: "rect", c: "clearRect", i: "eyedropper", b: "building" } as Record<string, Tool>)[e.key.toLowerCase()];
+    const k = ({ p: "place", e: "erase", r: "rect", c: "clearRect", i: "eyedropper", b: "building", t: "terrain" } as Record<string, Tool>)[e.key.toLowerCase()];
     if (k) tool = k;
   }
 
@@ -291,6 +373,7 @@
 
   function onhover(h: { terrain: { x: number; y: number } | null; item: { x: number; y: number } | null } | null) {
     hoverItem = h?.item ?? null;
+    hoverTerrain = h?.terrain ?? null;
     info = map && h ? inspectTile(map, makeLayout(map.items[0].width / 32), h.terrain, h.item) : null;
   }
 </script>
@@ -298,7 +381,7 @@
 <svelte:window onkeydown={onkey} />
 
 <div class="map">
-  <h1>Map <span class="muted">· {editing ? (tool === "building" ? "editing buildings" : "editing items") : "viewer"}</span></h1>
+  <h1>Map <span class="muted">· {editing ? (tool === "building" ? "editing buildings" : tool === "terrain" ? "editing terrain" : "editing items") : "viewer"}</span></h1>
   <MapToolbar bind:mode bind:layer={editLayer} bind:tool {blocked} />
   <div class="bar">
     <fieldset>
@@ -322,7 +405,7 @@
         <p class="muted">Loading map…</p>
       {:then { default: MapView }}
         {#key map}
-          <MapView {map} {acreTiles} {sprites} {layers} {version} {structuresVersion} {terrainVersion} {ghost} {paint} dim={editing ? (editLayer === 0 ? "items1" : "items0") : null} {onhover} onerror={(m) => (error = m)} />
+          <MapView {map} {acreTiles} {sprites} {layers} {version} {structuresVersion} {terrainVersion} paintGrid={tool === "terrain" ? "terrain" : "items"} {ghost} {paint} dim={editing ? (editLayer === 0 ? "items1" : "items0") : null} {onhover} onerror={(m) => (error = m)} />
         {/key}
       {:catch e}
         <p class="err" role="alert">The map viewer could not be loaded: {e instanceof Error ? e.message : String(e)}</p>
@@ -330,6 +413,9 @@
       <div class="side">
         {#if editing && tool === "building" && store}
           <BuildingPanel map={store.map} {version} {acreW} bind:selected bind:addType />
+          <p class="status" data-testid="map-status" role="status">{status}</p>
+        {:else if editing && tool === "terrain" && store}
+          <TerrainPanel map={store.map} {version} bind:mode={tmode} bind:delta={tdelta} bind:part={tpart} bind:picked />
           <p class="status" data-testid="map-status" role="status">{status}</p>
         {:else if editing}
           <MapBrush bind:raw={brush} />

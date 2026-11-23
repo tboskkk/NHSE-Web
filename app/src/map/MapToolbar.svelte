@@ -10,7 +10,7 @@
   } = $props();
 
   const TOOLS: [Tool, string, string][] = [
-    ["place", "Place", "P"], ["erase", "Erase", "E"], ["rect", "Fill area", "R"], ["clearRect", "Clear area", "C"], ["eyedropper", "Pick", "I"], ["building", "Buildings", "B"],
+    ["place", "Place", "P"], ["erase", "Erase", "E"], ["rect", "Fill area", "R"], ["clearRect", "Clear area", "C"], ["eyedropper", "Pick", "I"], ["building", "Buildings", "B"], ["terrain", "Terrain", "T"],
   ];
 </script>
 
