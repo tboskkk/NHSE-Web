@@ -1,4 +1,5 @@
-import { BUILDING_COUNT, type BuildingInfo } from "./building";
+import type { Revision } from "../save/revisions";
+import { BUILDING_COUNT, BUILDING_SIZE, type BuildingInfo } from "./building";
 import { isMultiInstanceType, isKnownBuildingType, mayOverlapPlaza, skipsGroundRule } from "./buildingTypes";
 import { isNone } from "./footprint";
 import { BUILDING_ITEM_TILES, itemToWorld, PLAZA_ITEM_TILES } from "./geometry";
@@ -116,4 +117,32 @@ export function planBuildingEdit(ctx: PlaceCtx, op: BuildingEditOp): BuildingPla
     if (n) throw new RangeError(`${t.name} overlaps ${n} item${n === 1 ? "" : "s"}`);
   }
   return { buildings, plaza };
+}
+
+/** Writes only the slots/plaza that differ. Retype/move keep the unused bytes 14-15 and 16-19; a cleared slot is 20 zero bytes. */
+export function writeBuildingEdit(main: Uint8Array, rev: Revision, before: BuildingPlan, after: BuildingPlan): void {
+  const dv = new DataView(main.buffer, main.byteOffset, main.byteLength);
+  const o = rev.mainOffsets;
+  for (let i = 0; i < BUILDING_COUNT; i++) {
+    const b = before.buildings[i]!, a = after.buildings[i]!;
+    if (same(a, b)) continue;
+    const at = o.mainFieldStructure + i * BUILDING_SIZE;
+    if (a.type === 0) {
+      main.fill(0, at, at + BUILDING_SIZE);
+      continue;
+    }
+    dv.setUint16(at, a.type, true);
+    dv.setUint16(at + 2, a.x, true);
+    dv.setUint16(at + 4, a.y, true);
+    dv.setUint8(at + 6, a.angle);
+    dv.setInt8(at + 7, a.bit);
+    dv.setUint16(at + 8, a.subType, true);
+    dv.setUint8(at + 10, a.typeArg);
+    dv.setUint16(at + 12, a.uniqueId, true);
+  }
+  if (before.plaza.x !== after.plaza.x || before.plaza.z !== after.plaza.z) {
+    const at = o.outsideField + 72 * 2;
+    dv.setUint32(at + 4, after.plaza.x, true);
+    dv.setUint32(at + 8, after.plaza.z, true);
+  }
 }

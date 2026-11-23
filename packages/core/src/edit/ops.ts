@@ -3,6 +3,7 @@ import { renamePlayer, renameTown, type ItemArea, type Personal } from "../save/
 import { Item } from "../structures/item";
 import type { GameStrings } from "../strings/gameStrings";
 import { type MapEditOp, planMapEdit, writeTiles } from "../map/applyMapEdit";
+import { type BuildingEditOp, planBuildingEdit, writeBuildingEdit } from "../map/applyBuildingEdit";
 import { readMap } from "../map/mapData";
 
 /** Extra data some ops need that the save does not carry. */
@@ -21,6 +22,7 @@ export type EditOp =
   | { op: "profileFruit"; player: number; value: number }
   | { op: "setItem"; player: number; area: ItemArea; slot: number; raw: string /* 16 hex */ }
   | { op: "moveItem"; player: number; from: SlotRef; to: SlotRef } /* swap */
+  | BuildingEditOp /* whole building slots + plaza; see map/applyBuildingEdit.ts */
   | MapEditOp /* tiles of one field item layer; see map/applyMapEdit.ts */
   | { op: "batch"; label: string; ops: EditOp[] }; /* one undo step; describeOp returns label */
 
@@ -81,6 +83,10 @@ export function validateOp(save: HorizonSave, op: EditOp, env: OpEnv = {}): void
     planFor(save, op, env);
     return;
   }
+  if (op.op === "buildingEdit") {
+    buildingPlanFor(save, op, env);
+    return;
+  }
   if (op.op !== "townName") personalOf(save, op.player);
   switch (op.op) {
     case "wallet":
@@ -126,6 +132,13 @@ function planFor(save: HorizonSave, op: MapEditOp, env: OpEnv) {
   return { map, tiles: planMapEdit({ map, acreTiles: env.acreTiles }, op) };
 }
 
+function buildingPlanFor(save: HorizonSave, op: BuildingEditOp, env: OpEnv) {
+  if (!env.acreTiles) throw new Error("Map data is not available.");
+  const map = readMap(save.main.data, save.revision);
+  const before = { buildings: map.buildings, plaza: map.plaza };
+  return { before, after: planBuildingEdit({ map, acreTiles: env.acreTiles }, op) };
+}
+
 export function applyOp(save: HorizonSave, op: EditOp, env: OpEnv = {}): void {
   validateOp(save, op, env);
   applyValidated(save, op, env);
@@ -137,6 +150,11 @@ function applyValidated(save: HorizonSave, op: EditOp, env: OpEnv): void {
       const { map, tiles } = planFor(save, op, env);
       const l = map.items[op.layer];
       writeTiles(save.main.data, save.revision, op.layer, l.height, l.width, tiles, l.raw);
+      return;
+    }
+    case "buildingEdit": {
+      const { before, after } = buildingPlanFor(save, op, env);
+      writeBuildingEdit(save.main.data, save.revision, before, after);
       return;
     }
     case "wallet":
@@ -227,6 +245,7 @@ export function describeOp(save: HorizonSave, strings: GameStrings, op: EditOp):
       return `Swap ${AREA_LABEL[op.from.area]} slot ${op.from.slot + 1} (${a}) with ${AREA_LABEL[op.to.area]} slot ${op.to.slot + 1} (${b})`;
     }
     case "mapEdit":
+    case "buildingEdit":
     case "batch":
       return op.label;
   }

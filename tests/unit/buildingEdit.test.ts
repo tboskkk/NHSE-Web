@@ -1,4 +1,11 @@
 import { expect, test } from "bun:test";
+import { readFileSync } from "node:fs";
+import { join } from "node:path";
+import { applyOp, describeOp, validateOp, type EditOp } from "../../packages/core/src/edit/ops";
+import { EditSession } from "../../packages/core/src/edit/session";
+import { readMap } from "../../packages/core/src/map/mapData";
+import { HorizonSave } from "../../packages/core/src/save/horizonSave";
+import { goldenTest, hash, readDir, REPO, SAVE } from "../golden/helpers";
 import type { BuildingInfo } from "../../packages/core/src/map/building";
 import { planBuildingEdit, type BuildingEditOp } from "../../packages/core/src/map/applyBuildingEdit";
 import { WORLD_ITEM_TILES } from "../../packages/core/src/map/geometry";
@@ -119,4 +126,101 @@ test("the plan never touches the source map", () => {
   try { planBuildingEdit(ctx, op([{ slot: 2, building: bld(5, 140, 100) }])); } catch {}
   planBuildingEdit(ctx, op([{ slot: 2, building: bld(21, 104, 100, { uniqueId: 7 }) }]));
   expect(JSON.stringify(map.buildings)).toBe(before);
+});
+
+// ---- Task 3: as an EditOp against a real save ----
+const acreTiles = () => new Uint8Array(readFileSync(join(REPO, "app/public/data/acretiles.bin")));
+async function real() {
+  const sav = await HorizonSave.load(readDir(SAVE!));
+  const map = readMap(sav.main.data, sav.revision);
+  const ctx = { map, acreTiles: acreTiles() };
+  const free = (slot: number, make: (x: number, y: number) => BuildingInfo): { x: number; y: number } => {
+    for (let x = 100; x < 260; x += 2)
+      for (let y = 60; y < 200; y += 2)
+        try { planBuildingEdit(ctx, op([{ slot, building: make(x, y) }])); return { x, y }; } catch { /* occupied */ }
+    throw new Error("no free spot");
+  };
+  return { sav, map, ctx, free, env: { acreTiles: acreTiles() } };
+}
+const diffOffsets = (a: Uint8Array, b: Uint8Array) => {
+  const out: number[] = [];
+  for (let i = 0; i < a.length; i++) if (a[i] !== b[i]) out.push(i);
+  return out;
+};
+const slotOff = (sav: HorizonSave, slot: number) => sav.revision.mainOffsets.mainFieldStructure + slot * 0x14;
+const plazaOff = (sav: HorizonSave) => sav.revision.mainOffsets.outsideField + 72 * 2 + 4;
+
+goldenTest("buildingEdit move changes exactly the x/y bytes; describeOp is the label", async () => {
+  const { sav, map, free, env } = await real();
+  const b = map.buildings[5]!;
+  const to = free(5, (x, y) => ({ ...b, x, y }));
+  const before = sav.main.data.slice();
+  const e = op([{ slot: 5, building: { ...b, ...to } }]);
+  expect(describeOp(sav, undefined as never, e)).toBe("t");
+  applyOp(sav, e, env);
+  const o = slotOff(sav, 5);
+  const changed = diffOffsets(before, sav.main.data);
+  expect(changed.length).toBeGreaterThan(0);
+  expect(changed.every((i) => i >= o + 2 && i < o + 6)).toBe(true);
+  const dv = new DataView(sav.main.data.buffer, sav.main.data.byteOffset);
+  expect([dv.getUint16(o + 2, true), dv.getUint16(o + 4, true)]).toEqual([to.x, to.y]);
+});
+
+goldenTest("buildingEdit retype preserves the unused bytes; clear zeroes 20 bytes; plaza move touches only the plaza", async () => {
+  const { sav, map, free, env } = await real();
+  const o = slotOff(sav, 5);
+  sav.main.data.set([0xaa, 0xbb, 0xcc, 0xdd], o + 16); // distinct unused bytes
+  const snap = sav.main.data.slice();
+  const b = map.buildings[5]!;
+  applyOp(sav, op([{ slot: 5, building: { ...b, subType: 3, typeArg: 4 } }]), env);
+  expect([...sav.main.data.slice(o + 14, o + 20)]).toEqual([...snap.slice(o + 14, o + 20)]);
+  const snap2 = sav.main.data.slice();
+  applyOp(sav, op([{ slot: 5, building: bld(0, 0, 0) }]), env);
+  expect([...sav.main.data.slice(o, o + 20)]).toEqual(new Array(20).fill(0));
+  expect(diffOffsets(snap2, sav.main.data).every((i) => i >= o && i < o + 20)).toBe(true);
+
+  const m2 = readMap(sav.main.data, sav.revision);
+  const pz = { x: m2.plaza.x, z: m2.plaza.z };
+  const ctx = { map: m2, acreTiles: acreTiles() };
+  let to: { x: number; z: number } | null = null;
+  for (let x = 20; x < 260 && !to; x += 2) for (let z = 40; z < 200 && !to; z += 2)
+    if (x !== pz.x || z !== pz.z) try { planBuildingEdit(ctx, op([], { x, z })); to = { x, z }; } catch { /* blocked */ }
+  void free;
+  if (!to) throw new Error("no plaza spot");
+  const before = sav.main.data.slice();
+  applyOp(sav, op([], to), env);
+  const po = plazaOff(sav);
+  const ch = diffOffsets(before, sav.main.data);
+  expect(ch.length).toBeGreaterThan(0);
+  expect(ch.every((i) => (i >= po && i < po + 4) || (i >= po + 4 && i < po + 8))).toBe(true);
+  const dv = new DataView(sav.main.data.buffer, sav.main.data.byteOffset);
+  expect([dv.getUint32(po, true), dv.getUint32(po + 4, true)]).toEqual([to.x, to.z]);
+});
+
+goldenTest("buildingEdit undo/redo restore exact bytes; a batch of two is one step; a refusal records nothing", async () => {
+  const { sav, map, free, env } = await real();
+  const b5 = map.buildings[5]!;
+  const to = free(5, (x, y) => ({ ...b5, x, y }));
+  const session = new EditSession(sav);
+  const before = hash(sav.main.data);
+  const e = op([{ slot: 5, building: { ...b5, ...to } }]);
+  session.apply("t", (s) => applyOp(s, e, env));
+  const after = hash(sav.main.data);
+  expect(after).not.toBe(before);
+  session.undo();
+  expect(hash(sav.main.data)).toBe(before);
+  session.redo();
+  expect(hash(sav.main.data)).toBe(after);
+
+  const s2 = new EditSession(sav);
+  const batch: EditOp = { op: "batch", label: "two", ops: [op([{ slot: 5, building: { ...b5, subType: 9 } }]), op([{ slot: 5, building: { ...b5, subType: 9, typeArg: 2 } }])] };
+  s2.apply("two", (s) => applyOp(s, batch, env));
+  expect(s2.changes.length).toBe(1);
+
+  const s3 = new EditSession(sav);
+  const h = hash(sav.main.data);
+  expect(() => s3.apply("bad", (s) => applyOp(s, op([{ slot: 46, building: b5 }]), env))).toThrow("slot must be 0-45");
+  expect(hash(sav.main.data)).toBe(h);
+  expect(s3.changes.length).toBe(0);
+  expect(() => validateOp(sav, op([{ slot: 5, building: b5 }]))).toThrow("Map data is not available");
 });
