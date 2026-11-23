@@ -44,7 +44,7 @@ test("3D view renders the island, responds to the camera keys and returns to 2D"
   await page.waitForTimeout(400);
   const b = await canvas.screenshot();
   expect(Buffer.compare(a, b)).not.toBe(0);
-  await expect(page.getByTestId("edit-toggle")).toBeDisabled();
+  await expect(page.getByTestId("edit-toggle")).toBeEnabled(); // 3D editing is on
   await page.getByTestId("view2d").click();
   await expect(page.locator("[data-testid=map-host][data-ready=true]")).toBeVisible();
 });

@@ -48,9 +48,7 @@
   const blocked = $derived((app.loaded?.invalidHashes.length ?? 0) > 0 && !app.hashWarningDismissed ? "Dismiss the hash warning above to enable editing." : null);
   let view = $state<"2d" | "3d">("2d");
   let error3d = $state<string | null>(null);
-  const toolbarBlocked = $derived(view === "3d" ? "Switch to 2D to edit" : blocked);
-  const editing = $derived(mode === "edit" && blocked === null && view === "2d");
-  $effect(() => { if (view === "3d") mode = "view"; });
+  const editing = $derived(mode === "edit" && blocked === null);
   // building tool: selection, drag and add-mode state (raw: ops are posted to the worker)
   let selected = $state.raw<Target | null>(null);
   let addType = $state<number | null>(null);
@@ -390,7 +388,7 @@
 
 <div class="map">
   <h1>Map <span class="muted">· {editing ? (tool === "building" ? "editing buildings" : tool === "terrain" ? "editing terrain" : "editing items") : "viewer"}</span></h1>
-  <MapToolbar bind:mode bind:layer={editLayer} bind:tool blocked={toolbarBlocked} />
+  <MapToolbar bind:mode bind:layer={editLayer} bind:tool {blocked} />
   <div class="seg" role="group" aria-label="View">
     <button data-testid="view2d" class:on={view === "2d"} aria-pressed={view === "2d"} onclick={() => { view = "2d"; error3d = null; }}>2D</button>
     <button data-testid="view3d" class:on={view === "3d"} aria-pressed={view === "3d"} onclick={() => (view = "3d")}>3D</button>
@@ -424,7 +422,7 @@
             <p class="muted">Loading 3D view…</p>
           {:then { default: MapView3D }}
             {#key map}
-              <MapView3D {map} {acreTiles} {sprites} {version} {structuresVersion} {terrainVersion} onerror={(m) => (error3d = m)} />
+              <MapView3D {map} {acreTiles} {sprites} {layers} {version} {structuresVersion} {terrainVersion} paintGrid={tool === "terrain" ? "terrain" : "items"} {ghost} {paint} {onhover} onerror={(m) => (error3d = m)} />
             {/key}
           {:catch e}
             <p class="err" role="alert">The 3D view could not be loaded: {e instanceof Error ? e.message : String(e)}</p>
