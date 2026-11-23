@@ -118,3 +118,30 @@ test("wall quads span exactly their shared tile edge, between the two heights", 
     `${x0},${x0 + 2},${z0 + 2},${z0 + 2}`, // south
   ]));
 });
+
+test("tiles marked replaced emit no top quad and no wall on any edge they touch", () => {
+  const m = emptyMap();
+  m.terrain.elevation[tIdx(10, 10)] = 1;
+  const f = buildTileField(m, acreTiles());
+  const full = buildTerrainMesh(f);
+  const replaced = new Uint8Array(W * H);
+  replaced[idx(10, 10)] = 1; // the raised tile itself
+  const r = buildTerrainMesh(f, replaced);
+  // one quad less, and the four walls around the raised tile are gone
+  expect(r.indices.length).toBe(full.indices.length - (1 + 4) * 2 * 3);
+  expect(r.positions.length).toBe(full.positions.length - (1 + 4) * 12);
+  const noMask = buildTerrainMesh(f, new Uint8Array(W * H));
+  expect([...noMask.indices]).toEqual([...full.indices]); // an all-zero mask changes nothing
+});
+
+test("a replaced tile next to a lower tile leaves that neighbour's other walls alone", () => {
+  const m = emptyMap();
+  m.terrain.elevation[tIdx(10, 10)] = 1;
+  m.terrain.elevation[tIdx(12, 10)] = 1;
+  const f = buildTileField(m, acreTiles());
+  const replaced = new Uint8Array(W * H);
+  replaced[idx(10, 10)] = 1;
+  const r = buildTerrainMesh(f, replaced);
+  const full = buildTerrainMesh(f);
+  expect(r.indices.length).toBe(full.indices.length - (1 + 4) * 2 * 3); // only the replaced tile's own quad and walls
+});

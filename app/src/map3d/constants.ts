@@ -9,3 +9,5 @@ export const BANK_RGB = [138, 122, 90] as const;
 export const SEA_RGB = 0x80d7c3;
 /** World units per model unit for imported plant models (a footprint tile is 5 model units wide); calibrated by eye. */
 export const MODEL_SCALE = 1 / 5;
+/** +1 or -1: which way a terrain tile's angle (0..3 quarter turns) rotates its piece about y; verified against the flat map. */
+export const ANGLE_DIR = 1;

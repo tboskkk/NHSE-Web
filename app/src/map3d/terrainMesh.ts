@@ -51,8 +51,11 @@ export function heightAt(f: TileField, x: number, z: number): number {
   return f.y[wz * f.width + wx]!;
 }
 
-/** One flat quad per tile plus a vertical wall quad on every east/south edge where heights differ. */
-export function buildTerrainMesh(f: TileField): MeshData {
+/**
+ * One flat quad per tile plus a vertical wall quad on every east/south edge where heights differ.
+ * Tiles marked in `replaced` (index `wy * width + wx`) are drawn as game pieces instead: they emit no quad and no wall on any edge they touch.
+ */
+export function buildTerrainMesh(f: TileField, replaced?: Uint8Array): MeshData {
   const { width: w, height: h } = f;
   const walls: number[][] = []; // [x0,z0,x1,z1,yLow,yHigh, r,g,b]
   for (let wy = 0; wy < h; wy++) {
@@ -64,14 +67,16 @@ export function buildTerrainMesh(f: TileField): MeshData {
       if (wy + 1 < h) edges.push([i + w, [wx * TILE, (wy + 1) * TILE, (wx + 1) * TILE, (wy + 1) * TILE]]);
       for (const [j, [x0, z0, x1, z1]] of edges) {
         const a = f.y[i]!, b = f.y[j]!;
-        if (a === b) continue;
+        if (a === b || replaced?.[i] || replaced?.[j]) continue;
         const lowWater = (a < b ? f.water[i] : f.water[j]) === 1;
         const [r, g, bl] = lowWater ? BANK_RGB : CLIFF_RGB;
         walls.push([x0, z0, x1, z1, Math.min(a, b), Math.max(a, b), r, g, bl]);
       }
     }
   }
-  const quads = w * h + walls.length;
+  let tiles = w * h;
+  if (replaced) for (let i = 0; i < w * h; i++) if (replaced[i]) tiles--;
+  const quads = tiles + walls.length;
   const positions = new Float32Array(quads * 12);
   const colors = new Float32Array(quads * 12);
   const indices = new Uint32Array(quads * 6);
@@ -80,16 +85,18 @@ export function buildTerrainMesh(f: TileField): MeshData {
     for (let k = 0; k < 4; k++) colors.set([c[0]! / 255, c[1]! / 255, c[2]! / 255], q * 12 + k * 3);
     indices.set([q * 4, q * 4 + 1, q * 4 + 2, q * 4, q * 4 + 2, q * 4 + 3], q * 6);
   };
+  let q = 0;
   for (let wy = 0; wy < h; wy++) {
     for (let wx = 0; wx < w; wx++) {
       const i = wy * w + wx;
+      if (replaced?.[i]) continue;
       const x0 = wx * TILE, z0 = wy * TILE, y = f.y[i]!;
-      put(i, [x0, y, z0, x0 + TILE, y, z0, x0 + TILE, y, z0 + TILE, x0, y, z0 + TILE], [f.rgb[i * 3]!, f.rgb[i * 3 + 1]!, f.rgb[i * 3 + 2]!]);
+      put(q++, [x0, y, z0, x0 + TILE, y, z0, x0 + TILE, y, z0 + TILE, x0, y, z0 + TILE], [f.rgb[i * 3]!, f.rgb[i * 3 + 1]!, f.rgb[i * 3 + 2]!]);
     }
   }
   walls.forEach((s, n) => {
     const [x0, z0, x1, z1, lo, hi] = s as [number, number, number, number, number, number];
-    put(w * h + n, [x0, lo, z0, x1, lo, z1, x1, hi, z1, x0, hi, z0], [s[6]!, s[7]!, s[8]!]);
+    put(q + n, [x0, lo, z0, x1, lo, z1, x1, hi, z1, x0, hi, z0], [s[6]!, s[7]!, s[8]!]);
   });
   return { positions, colors, indices };
 }
