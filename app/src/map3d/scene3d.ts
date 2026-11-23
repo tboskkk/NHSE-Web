@@ -11,6 +11,7 @@ import type { LoadedModels } from "./modelPack";
 import { structureBoxes } from "./structureBoxes";
 import { ghostCorners, itemTileOrigin, type Tile, worldToItemTile, worldToTerrainTile } from "./pick";
 import { buildTerrainMesh, buildTileField, heightAt, type TileField } from "./terrainMesh";
+import { groupTerrainPieces } from "./terrainPieces";
 
 export interface Scene3D {
   refreshTerrain(): void;
@@ -102,9 +103,41 @@ export function createScene3D(canvas: HTMLCanvasElement, opts: Scene3DOptions): 
   water.position.set(WORLD.w / 2, WATER_Y + 0.2, WORLD.h / 2);
   scene.add(water);
 
+  const terrainPieces = new THREE.Group();
+  scene.add(terrainPieces);
+  const pieceDummy = new THREE.Object3D();
+  function drawTerrainPieces(pieces: Map<string, { x: number; y: number; z: number; rotY: number }[]>) {
+    for (const c of terrainPieces.children as THREE.InstancedMesh[]) {
+      for (const mat of Array.isArray(c.material) ? c.material : [c.material]) mat.dispose();
+      c.dispose();
+    }
+    terrainPieces.clear();
+    for (const [key, list] of pieces) {
+      const asset = modelAssets.get(key);
+      if (!asset?.textures) continue;
+      const mats = asset.textures.map((t) => new THREE.MeshLambertMaterial({ map: t, alphaTest: 0.5, side: THREE.DoubleSide }));
+      const mesh = new THREE.InstancedMesh(asset.geometry, mats, list.length);
+      list.forEach((i, n) => {
+        pieceDummy.position.set(i.x, i.y, i.z);
+        pieceDummy.rotation.set(0, i.rotY, 0);
+        pieceDummy.scale.setScalar(MODEL_SCALE);
+        pieceDummy.updateMatrix();
+        mesh.setMatrixAt(n, pieceDummy.matrix);
+      });
+      mesh.frustumCulled = false;
+      terrainPieces.add(mesh);
+    }
+    terrainPieces.visible = layerVis.terrain;
+    schedule();
+  }
+
   const refreshTerrain = () => {
     field = buildTileField(opts.map, opts.acreTiles);
-    const m = buildTerrainMesh(field);
+    // pieces whose assets are ready replace their flat tiles; everything else (or no pack) keeps the flat look
+    const ready = new Map([...modelTerrain].filter(([, key]) => modelAssets.has(key)));
+    const { pieces, replaced } = groupTerrainPieces(opts.map, ready);
+    drawTerrainPieces(pieces);
+    const m = buildTerrainMesh(field, replaced);
     const g = new THREE.BufferGeometry();
     g.setAttribute("position", new THREE.BufferAttribute(m.positions, 3));
     g.setAttribute("color", new THREE.BufferAttribute(m.colors.map(toLinear), 3));
@@ -171,22 +204,50 @@ export function createScene3D(canvas: HTMLCanvasElement, opts: Scene3DOptions): 
     );
   };
   // imported natural-item models: ready assets only; items of a model that is still loading or failed keep their billboards
-  let modelAssets = new Map<string, { geometry: THREE.BufferGeometry; texture: THREE.Texture }>();
+  let modelAssets = new Map<string, { geometry: THREE.BufferGeometry; texture: THREE.Texture; textures?: THREE.Texture[] }>();
   let modelItems = new Map<number, string>();
+  let modelTerrain = new Map<string, string>();
+  let modelTextures = new Map<Uint8Array, THREE.Texture>(); // every texture of the current pack once (pieces share material textures)
   let modelToken = 0;
   const disposeModels = () => {
-    for (const a of modelAssets.values()) { a.geometry.dispose(); a.texture.dispose(); }
+    for (const a of modelAssets.values()) a.geometry.dispose();
+    for (const t of modelTextures.values()) t.dispose();
     modelAssets = new Map();
     modelItems = new Map();
+    modelTerrain = new Map();
+    modelTextures = new Map();
   };
-  const loadModelTexture = (png: Uint8Array) =>
+  const loadModelTexture = (png: Uint8Array, tiled: boolean) =>
     new Promise<THREE.Texture>((resolve, reject) => {
       const url = URL.createObjectURL(new Blob([png as BlobPart], { type: "image/png" }));
-      new THREE.TextureLoader().load(url, (t) => { URL.revokeObjectURL(url); t.magFilter = THREE.NearestFilter; t.colorSpace = THREE.SRGBColorSpace; resolve(t); }, undefined, () => { URL.revokeObjectURL(url); reject(new Error("texture failed")); });
+      new THREE.TextureLoader().load(
+        url,
+        (t) => {
+          URL.revokeObjectURL(url);
+          t.colorSpace = THREE.SRGBColorSpace;
+          if (tiled) t.wrapS = t.wrapT = THREE.RepeatWrapping; // terrain pieces tile their textures (UVs outside 0..1)
+          else t.magFilter = THREE.NearestFilter;
+          resolve(t);
+        },
+        undefined,
+        () => { URL.revokeObjectURL(url); reject(new Error("texture failed")); },
+      );
     });
   function setModels(pack: LoadedModels | null) {
     const token = ++modelToken;
-    if (!pack) { disposeModels(); refreshItems(); return; }
+    if (!pack) {
+      const hadTerrain = modelTerrain.size > 0;
+      disposeModels();
+      if (hadTerrain) refreshTerrain();
+      else refreshItems();
+      return;
+    }
+    const textures = new Map<Uint8Array, Promise<THREE.Texture>>(); // one decode per distinct PNG (pieces share material textures)
+    const tex = (png: Uint8Array, tiled: boolean) => {
+      let p = textures.get(png);
+      if (!p) textures.set(png, (p = loadModelTexture(png, tiled)));
+      return p;
+    };
     Promise.all(
       [...pack.models].map(async ([key, m]) => {
         try {
@@ -195,17 +256,28 @@ export function createScene3D(canvas: HTMLCanvasElement, opts: Scene3DOptions): 
           g.setAttribute("normal", new THREE.BufferAttribute(m.geometry.normals, 3));
           g.setAttribute("uv", new THREE.BufferAttribute(m.geometry.uvs, 2));
           g.setIndex(new THREE.BufferAttribute(m.geometry.indices, 1));
-          return [key, { geometry: g, texture: await loadModelTexture(m.texture) }] as const;
+          for (const gr of m.geometry.groups ?? []) g.addGroup(gr.start, gr.count, gr.material);
+          if (m.textures) return [key, { geometry: g, texture: await tex(m.textures[0]!, true), textures: await Promise.all(m.textures.map((t) => tex(t, true))) }] as const;
+          return [key, { geometry: g, texture: await tex(m.texture, false) }] as const;
         } catch {
-          return null; // a model whose texture fails to load is left out: its items keep their billboards
+          return null; // a model whose texture fails to load is left out: its items keep their billboards, its terrain tiles stay flat
         }
       }),
-    ).then((list) => {
-      if (token !== modelToken || disposed) { for (const e of list) if (e) { e[1].geometry.dispose(); e[1].texture.dispose(); } return; }
+    ).then(async (list) => {
+      const settled = await Promise.allSettled([...textures.values()]);
+      const loaded = new Map<Uint8Array, THREE.Texture>();
+      [...textures.keys()].forEach((k, i) => { const r = settled[i]!; if (r.status === "fulfilled") loaded.set(k, r.value); });
+      if (token !== modelToken || disposed) {
+        for (const e of list) if (e) e[1].geometry.dispose();
+        for (const t of loaded.values()) t.dispose();
+        return;
+      }
       disposeModels();
       modelAssets = new Map(list.filter((e): e is NonNullable<typeof e> => e !== null));
+      modelTextures = loaded;
       modelItems = new Map([...pack.items].filter(([, key]) => modelAssets.has(key)));
-      refreshItems();
+      modelTerrain = new Map(pack.terrain);
+      refreshTerrain(); // also refreshes structures and items
     });
   }
   let itemsToken = 0;
@@ -370,7 +442,7 @@ export function createScene3D(canvas: HTMLCanvasElement, opts: Scene3DOptions): 
     },
     setLayers(l) {
       layerVis = l;
-      terrain.visible = water.visible = l.terrain;
+      terrain.visible = water.visible = terrainPieces.visible = l.terrain;
       structures.visible = l.buildings;
       for (const m of itemsGroup.children) m.visible = m.userData.layer === 0 ? l.items0 : l.items1;
       applyGrid();
@@ -401,6 +473,7 @@ export function createScene3D(canvas: HTMLCanvasElement, opts: Scene3DOptions): 
       (ghostLine.material as THREE.Material).dispose();
       for (const c of [...structures.children, ...itemsGroup.children] as THREE.Mesh[]) (c.material as THREE.Material).dispose();
       for (const t of textures.values()) t?.dispose();
+      for (const c of terrainPieces.children as THREE.InstancedMesh[]) for (const mat of Array.isArray(c.material) ? c.material : [c.material]) mat.dispose();
       disposeModels();
       renderer.dispose();
     },
