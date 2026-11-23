@@ -248,3 +248,19 @@ goldenTest("buildingPlan reports the refusal reason and never dirties the save",
   expect((await freeBuildingMove(api)).op.op).toBe("buildingEdit");
   expect((await api.build("changed")).size).toBe(0);
 });
+
+goldenTest("buildingPlan sees edits, undo and redo (cached map is invalidated)", async () => {
+  const { api } = await fresh();
+  const { op, b, x, y } = await freeBuildingMove(api);
+  const m = await api.map();
+  const probe = { op: "buildingEdit" as const, label: "x", changes: [{ slot: 2, building: { ...m.buildings[2]!, x, y } }] };
+  const overlaps = async () => { const r = await api.buildingPlan(probe); return !r.ok && /overlaps/.test(r.reason); };
+  expect(await overlaps()).toBe(false); // primes the cache
+  await api.edit(op);
+  expect(await overlaps()).toBe(true);
+  await api.undo();
+  expect(await overlaps()).toBe(false);
+  await api.redo();
+  expect(await overlaps()).toBe(true);
+  expect(b.type).not.toBe(0);
+});

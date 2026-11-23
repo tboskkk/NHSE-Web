@@ -1,7 +1,7 @@
 import {
   applyOp, BUILDING_COUNT, BUILDING_SIZE, describeOp, planBuildingEdit, EditSession, GameStrings, getKind, getMenuIconSprite, HorizonSave, Item, readMap,
   planErase, planPlace, planRect, planRemoveWhere, planReplaceAll, planToOp, WEED_IDS,
-  type BuildingEditOp, type Change, type EditOp, type ItemArea, type Plan, type SaveFiles,
+  type BuildingEditOp, type Change, type EditOp, type ItemArea, type MapData, type Plan, type SaveFiles,
 } from "@nhse/core";
 import type { Api, ItemView, PlanRequest, PlanResult, PlayerView, Structures, Touched } from "./protocol";
 
@@ -64,6 +64,10 @@ export function createApi(fetcher: (path: string) => Promise<unknown>, fetchByte
     return { buildings: m.buildings, plaza: m.plaza };
   };
 
+  /** Parsed map reused between plan requests; dropped whenever the save bytes can change. */
+  let mapCache: MapData | null = null;
+  const planMap = (sav: HorizonSave): MapData => (mapCache ??= readMap(sav.main.data, sav.revision));
+
   const need = () => {
     if (!save || !session || !strings) throw new Error("No save is loaded.");
     return { save, session, strings };
@@ -92,6 +96,7 @@ export function createApi(fetcher: (path: string) => Promise<unknown>, fetchByte
       original = backup;
       forced = new Set(sav.invalidHashes().map((h) => h.path));
       save = sav;
+      mapCache = null;
       strings = s;
       session = new EditSession(sav);
       return {
@@ -134,15 +139,18 @@ export function createApi(fetcher: (path: string) => Promise<unknown>, fetchByte
       const { save, session, strings } = need();
       const env = { acreTiles: hasMapEdit(op) ? await acreTiles() : undefined };
       const label = describeOp(save, strings, op);
+      mapCache = null;
       const change = session.apply(label, (s) => applyOp(s, op, env));
       return { change: change ? change.label : null, history: session.changes.map((c) => c.label), touched: touchedBy(change), structures: structuresBy(change) };
     },
 
     async undo() {
+      mapCache = null;
       const c = need().session.undo();
       return { label: c?.label ?? null, touched: touchedBy(c), structures: structuresBy(c) };
     },
     async redo() {
+      mapCache = null;
       const c = need().session.redo();
       return { label: c?.label ?? null, touched: touchedBy(c), structures: structuresBy(c) };
     },
@@ -150,7 +158,7 @@ export function createApi(fetcher: (path: string) => Promise<unknown>, fetchByte
     async buildingPlan(op: BuildingEditOp) {
       const { save } = need();
       try {
-        planBuildingEdit({ map: readMap(save.main.data, save.revision), acreTiles: await acreTiles() }, op);
+        planBuildingEdit({ map: planMap(save), acreTiles: await acreTiles() }, op);
         return { ok: true as const };
       } catch (e) {
         return { ok: false as const, reason: e instanceof Error ? e.message : String(e) };
@@ -187,6 +195,7 @@ export function createApi(fetcher: (path: string) => Promise<unknown>, fetchByte
       const only = mode === "changed" ? new Set([...session.dirtyPairs(), ...forced]) : undefined;
       if (only && only.size === 0) return new Map();
       const seed = crypto.getRandomValues(new Uint32Array(1))[0]!;
+      mapCache = null;
       const out = await save.save(seed, only);
       session.absorb(); // save-time hashing mutated pair data; never record that as a user edit
       if (mode === "all") for (const [k, v] of save.passthrough) out.set(k, v.slice());
