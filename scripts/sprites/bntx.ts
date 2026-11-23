@@ -83,3 +83,41 @@ export function albedo(textures: BntxTexture[]): { rgba: Uint8Array; width: numb
   const raw = deswizzle(t.width >> 2, t.height >> 2, 8, t.blockHeightLog2, t.data);
   return { rgba: decodeBc1(t.width, t.height, raw), width: t.width, height: t.height, albCount: alb.length };
 }
+
+/** BC4 to one byte per pixel (w and h multiples of 4); 8-value mode when a > b, else 6 values plus 0 and 255. */
+export function decodeBc4(w: number, h: number, raw: Uint8Array): Uint8Array {
+  const out = new Uint8Array(w * h);
+  const bw = w >> 2;
+  for (let by = 0; by < h >> 2; by++) {
+    for (let bx = 0; bx < bw; bx++) {
+      const o = (by * bw + bx) * 8;
+      const a = raw[o]!, b = raw[o + 1]!;
+      const pal = [a, b];
+      if (a > b) for (let i = 1; i < 7; i++) pal.push(((7 - i) * a + i * b) / 7);
+      else {
+        for (let i = 1; i < 5; i++) pal.push(((5 - i) * a + i * b) / 5);
+        pal.push(0, 255);
+      }
+      let bits = 0n;
+      for (let i = 0; i < 6; i++) bits |= BigInt(raw[o + 2 + i]!) << BigInt(8 * i);
+      for (let i = 0; i < 16; i++) out[(by * 4 + (i >> 2)) * w + bx * 4 + (i & 3)] = Math.round(pal[Number((bits >> BigInt(3 * i)) & 7n)]!);
+    }
+  }
+  return out;
+}
+
+export type DecodedTexture = { width: number; height: number; channels: 1 | 4; data: Uint8Array };
+
+/** Decodes the BNTX formats the plant models use: BC4 (grey), BC1 (RGBA) and RGBA8. */
+export function decodeTexture(t: BntxTexture): DecodedTexture {
+  switch (t.format >> 8) {
+    case 0x1d:
+      return { width: t.width, height: t.height, channels: 1, data: decodeBc4(t.width, t.height, deswizzle(t.width >> 2, t.height >> 2, 8, t.blockHeightLog2, t.data)) };
+    case 0x1a:
+      return { width: t.width, height: t.height, channels: 4, data: decodeBc1(t.width, t.height, deswizzle(t.width >> 2, t.height >> 2, 8, t.blockHeightLog2, t.data)) };
+    case 0x0b:
+      return { width: t.width, height: t.height, channels: 4, data: deswizzle(t.width, t.height, 4, t.blockHeightLog2, t.data) };
+    default:
+      throw new Error(`unsupported format 0x${t.format.toString(16)}`);
+  }
+}
