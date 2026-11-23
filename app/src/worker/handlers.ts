@@ -1,14 +1,14 @@
 import {
-  applyOp, describeOp, EditSession, GameStrings, getKind, getMenuIconSprite, HorizonSave, Item, readMap,
+  applyOp, BUILDING_COUNT, BUILDING_SIZE, describeOp, planBuildingEdit, EditSession, GameStrings, getKind, getMenuIconSprite, HorizonSave, Item, readMap,
   planErase, planPlace, planRect, planRemoveWhere, planReplaceAll, planToOp, WEED_IDS,
-  type Change, type EditOp, type ItemArea, type Plan, type SaveFiles,
+  type BuildingEditOp, type Change, type EditOp, type ItemArea, type Plan, type SaveFiles,
 } from "@nhse/core";
-import type { Api, ItemView, PlanRequest, PlanResult, PlayerView, Touched } from "./protocol";
+import type { Api, ItemView, PlanRequest, PlanResult, PlayerView, Structures, Touched } from "./protocol";
 
 const clone = (files: SaveFiles): SaveFiles => new Map([...files].map(([k, v]) => [k, v.slice()]));
 const hex16 = (raw: bigint) => raw.toString(16).padStart(16, "0");
 
-const hasMapEdit = (op: EditOp): boolean => op.op === "mapEdit" || (op.op === "batch" && op.ops.some(hasMapEdit));
+const hasMapEdit = (op: EditOp): boolean => op.op === "mapEdit" || op.op === "buildingEdit" || (op.op === "batch" && op.ops.some(hasMapEdit));
 
 export function createApi(fetcher: (path: string) => Promise<unknown>, fetchBytes: (path: string) => Promise<Uint8Array> = async () => { throw new Error("Map data is not available."); }): Api {
   let save: HorizonSave | null = null;
@@ -50,6 +50,18 @@ export function createApi(fetcher: (path: string) => Promise<unknown>, fetchByte
       }
     }
     return out.sort((a, b) => a.layer - b.layer || a.index - b.index);
+  };
+
+  /** Buildings + plaza if a change touched their bytes (920 building bytes or the 12 plaza bytes), else null. */
+  const structuresBy = (change: Change | null): Structures | null => {
+    if (!save || !change) return null;
+    const o = save.revision.mainOffsets;
+    const b0 = o.mainFieldStructure, b1 = b0 + BUILDING_COUNT * BUILDING_SIZE;
+    const p0 = o.outsideField + 72 * 2, p1 = p0 + 12;
+    const hit = change.patches.some((p) => p.path === save!.main.path && ((p.offset < b1 && p.offset + p.after.length > b0) || (p.offset < p1 && p.offset + p.after.length > p0)));
+    if (!hit) return null;
+    const m = readMap(save.main.data, save.revision);
+    return { buildings: m.buildings, plaza: m.plaza };
   };
 
   const need = () => {
@@ -123,16 +135,26 @@ export function createApi(fetcher: (path: string) => Promise<unknown>, fetchByte
       const env = { acreTiles: hasMapEdit(op) ? await acreTiles() : undefined };
       const label = describeOp(save, strings, op);
       const change = session.apply(label, (s) => applyOp(s, op, env));
-      return { change: change ? change.label : null, history: session.changes.map((c) => c.label), touched: touchedBy(change) };
+      return { change: change ? change.label : null, history: session.changes.map((c) => c.label), touched: touchedBy(change), structures: structuresBy(change) };
     },
 
     async undo() {
       const c = need().session.undo();
-      return { label: c?.label ?? null, touched: touchedBy(c) };
+      return { label: c?.label ?? null, touched: touchedBy(c), structures: structuresBy(c) };
     },
     async redo() {
       const c = need().session.redo();
-      return { label: c?.label ?? null, touched: touchedBy(c) };
+      return { label: c?.label ?? null, touched: touchedBy(c), structures: structuresBy(c) };
+    },
+
+    async buildingPlan(op: BuildingEditOp) {
+      const { save } = need();
+      try {
+        planBuildingEdit({ map: readMap(save.main.data, save.revision), acreTiles: await acreTiles() }, op);
+        return { ok: true as const };
+      } catch (e) {
+        return { ok: false as const, reason: e instanceof Error ? e.message : String(e) };
+      }
     },
 
     async mapPlan(req: PlanRequest) {

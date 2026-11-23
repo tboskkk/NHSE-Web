@@ -210,3 +210,41 @@ goldenTest("bulk weed removal plans a batch, applies as one undo step and restor
   await api.undo();
   expect(weeds(await api.map())).toBe(weeds(before));
 });
+
+// ---- buildings ----
+async function freeBuildingMove(api: Awaited<ReturnType<typeof fresh>>["api"]) {
+  const m = await api.map();
+  const b = m.buildings[5]!;
+  for (let x = 100; x < 260; x += 2)
+    for (let y = 60; y < 200; y += 2) {
+      const op = { op: "buildingEdit" as const, label: "Move", changes: [{ slot: 5, building: { ...b, x, y } }] };
+      if ((await api.buildingPlan(op)).ok) return { op, b, x, y };
+    }
+  throw new Error("no free spot");
+}
+
+goldenTest("edit(buildingEdit) returns structures; undo and redo return old and new; other edits return null", async () => {
+  const { api } = await fresh();
+  const { op, b, x, y } = await freeBuildingMove(api);
+  const e = await api.edit(op);
+  expect(e.touched).toEqual([]);
+  expect(e.structures!.buildings[5]).toMatchObject({ x, y });
+  expect(e.structures!.buildings.length).toBe(46);
+  const u = await api.undo();
+  expect(u.structures!.buildings[5]).toMatchObject({ x: b.x, y: b.y });
+  const r = await api.redo();
+  expect(r.structures!.buildings[5]).toMatchObject({ x, y });
+  expect((await api.edit({ op: "wallet", player: 0, value: 12 })).structures).toBeNull();
+  expect((await api.edit({ op: "mapEdit", layer: 0, label: "x", changes: [] })).structures).toBeNull();
+});
+
+goldenTest("buildingPlan reports the refusal reason and never dirties the save", async () => {
+  const { api } = await fresh();
+  const m = await api.map();
+  const b = m.buildings[5]!;
+  const bad = await api.buildingPlan({ op: "buildingEdit", label: "x", changes: [{ slot: 5, building: { ...b, x: m.buildings[2]!.x + 1, y: m.buildings[2]!.y } }] });
+  expect(bad).toMatchObject({ ok: false });
+  expect((bad as { reason: string }).reason).toMatch(/overlaps/);
+  expect((await freeBuildingMove(api)).op.op).toBe("buildingEdit");
+  expect((await api.build("changed")).size).toBe(0);
+});

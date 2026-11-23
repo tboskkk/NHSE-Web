@@ -1,4 +1,4 @@
-import type { EditOp, MapData, SaveFiles } from "@nhse/core";
+import type { BuildingEditOp, BuildingInfo, EditOp, MapData, SaveFiles } from "@nhse/core";
 
 export type LoadResult = {
   island: string;
@@ -35,8 +35,10 @@ export type MapView = MapData & { revisionLabel: string };
 
 /** A field item layer tile that changed: column-major index and its new raw (16 hex). */
 export type Touched = { layer: 0 | 1; index: number; raw: string };
-export type EditResult = { change: string | null; history: string[]; touched: Touched[] };
-export type HistoryResult = { label: string | null; touched: Touched[] };
+/** Buildings and plaza as currently stored; sent only when an edit/undo/redo patch overlapped their bytes. */
+export type Structures = { buildings: BuildingInfo[]; plaza: { x: number; z: number } };
+export type EditResult = { change: string | null; history: string[]; touched: Touched[]; structures: Structures | null };
+export type HistoryResult = { label: string | null; touched: Touched[]; structures: Structures | null };
 
 type Tile = { x: number; y: number };
 export type PlanRequest =
@@ -78,6 +80,8 @@ export interface Api {
   map(): Promise<MapView>;
   /** Plans a map tool gesture or bulk action against the current save; never edits. */
   mapPlan(req: PlanRequest): Promise<PlanResult>;
+  /** Plans a building edit against the current save without editing; `reason` is the refusal message. */
+  buildingPlan(op: BuildingEditOp): Promise<{ ok: true } | { ok: false; reason: string }>;
   /** Display name for a 16-digit hex raw item value in the loaded language. */
   itemName(raw: string): Promise<string>;
 }
