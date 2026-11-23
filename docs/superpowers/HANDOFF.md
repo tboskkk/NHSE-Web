@@ -63,5 +63,13 @@ bun run gen:data                                       # regenerates generated/*
 - Tests: `NHSE_TEST_ROMFS=~/Games/ACNH/romfs` enables the romfs-gated tests (294 pass with `NHSE_TEST_SAVE` too). Unit tests use synthetic fixtures (`tests/unit/spriteFixtures.ts`).
 - Not covered: non-Ftr items, items without ReBody variants, fabric/pattern variants, per-material textures, rotation, lighting/Normal/Mix maps, several `_Alb` textures (first used; none seen).
 
+## Map 3D viewer (done, local commits)
+- "2D | 3D" toggle in `MapSection` (`view2d`/`view3d` test ids); 3D is read-only (Edit disabled, "Switch to 2D to edit"). three.js 0.180.0 lives only in the lazy `MapView3D` chunk (~510 kB; main bundle +2 kB). Spec/plan: `docs/superpowers/{specs,plans}/2026-11-23-map-3d-viewer-*`.
+- Code `app/src/map3d/`: `terrainMesh.ts` (pure: `buildTileField`, `buildTerrainMesh`, `heightAt`; heights = elevation level x `LEVEL_HEIGHT`, river/fall/ocean/static-water tiles at `WATER_Y`, cliff and bank walls, per-tile colours from the 2D terrain render), `structureBoxes.ts`, `itemGroups.ts` (pure; imported pack sprites lie flat on the footprint, bundled icons/leaf stand upright), `cameraKeys.ts`, `scene3d.ts` (three.js glue, render on demand, OrbitControls), `MapView3D.svelte`, `constants.ts` (all tuning by eye). Units: 1 world unit = 1 item tile, x east, z south, y up.
+- Controls: drag orbit, right-drag pan, scroll zoom, WASD/arrows move, R/F tilt, G acre grid. Live: follows `MapStore` version counters.
+- Tests: unit tests on the pure builders; `tests/e2e/map3d.spec.ts` (render + camera key + back to 2D; WebGL-unavailable message). Headless Chromium renders WebGL fine.
+- Known gaps: static acres render flat (no elevation data); the coast is a vertical wall; water is a flat tinted plane (no animation); no shadows; upright icons for items without an imported sprite; faint tone step between the lit ocean tiles and the far water; read-only.
+- Roadmap: 3D editing (picking, ghosts, existing validated ops), natural-item models from romfs (trees/bushes/flowers), acres only if safe.
+
 ## Next
-Villagers/collections sprites (own brainstorm), optionally shading or the 1526 no-ReBody items. Optional: scan more saves for terrain-observed.json (roads).
+3D editing (own brainstorm/spec/plan), then natural-item models. Optional: villagers/collections sprites; scan more saves for terrain-observed.json (roads); browser verification of the 2D editors; hash-warning gate.

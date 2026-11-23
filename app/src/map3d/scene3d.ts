@@ -2,7 +2,7 @@ import { type MapData } from "@nhse/core";
 import * as THREE from "three";
 import { OrbitControls } from "three/examples/jsm/controls/OrbitControls.js";
 import type { SpriteSource } from "../map/spriteSource";
-import { WATER_Y } from "./constants";
+import { SEA_RGB, WATER_Y } from "./constants";
 import { keyDelta } from "./cameraKeys";
 import { groupItems, type Instance } from "./itemGroups";
 import { structureBoxes } from "./structureBoxes";
@@ -44,7 +44,7 @@ export function createScene3D(canvas: HTMLCanvasElement, opts: Scene3DOptions): 
   });
 
   const scene = new THREE.Scene();
-  scene.background = new THREE.Color(0x80d7c3);
+  scene.background = new THREE.Color(SEA_RGB); // matches the water plane over sea tiles, so the horizon is seamless
   scene.add(new THREE.HemisphereLight(0xffffff, 0x6b7a66, 1.1));
   const sun = new THREE.DirectionalLight(0xffffff, 1.6);
   sun.position.set(100, 200, 60);
@@ -78,7 +78,7 @@ export function createScene3D(canvas: HTMLCanvasElement, opts: Scene3DOptions): 
   const terrain = new THREE.Mesh(new THREE.BufferGeometry(), new THREE.MeshLambertMaterial({ vertexColors: true, side: THREE.DoubleSide }));
   scene.add(terrain);
   const water = new THREE.Mesh(
-    new THREE.PlaneGeometry(WORLD.w, WORLD.h).rotateX(-Math.PI / 2),
+    new THREE.PlaneGeometry(4000, 4000).rotateX(-Math.PI / 2), // far larger than the island so no edge shows at the horizon
     new THREE.MeshBasicMaterial({ color: 0x3aa6c8, transparent: true, opacity: 0.55, depthWrite: false }),
   );
   water.position.set(WORLD.w / 2, WATER_Y + 0.2, WORLD.h / 2);
