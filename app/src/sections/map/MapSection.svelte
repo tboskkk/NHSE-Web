@@ -54,7 +54,7 @@
 
   $effect(() => { if (blocked) mode = "view"; });
   $effect(() => {
-    void app.loaded;
+    void app.loadEpoch;
     mode = "view";
   });
   $effect(() => {
@@ -228,7 +228,7 @@
 
   // (Re)load whenever a different save is opened; the map is read-only so edits elsewhere never change it.
   $effect(() => {
-    void app.loaded;
+    void app.loadEpoch;
     const mine = ++token;
     map = null;
     store = null;

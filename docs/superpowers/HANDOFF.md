@@ -5,7 +5,7 @@
 
 ## State
 - **main**: foundation complete (see below), 81 tests at that point.
-- **main** (origin/main = 436c04c + this doc commit locally): foundation, map viewer P1, map item editor P2a, all merged and pushed. Specs/plans under `docs/superpowers/{specs,plans}/` (`2026-11-22-map-editor-items-*`). Next: P2b buildings, P2c terrain (each own brainstorm/spec/plan), spike S, villagers/collections. 186 unit tests + 4 e2e pass with `NHSE_TEST_SAVE`.
+- **main** (origin/main = 436c04c + this doc commit locally): foundation, map viewer P1, map item editor P2a, all merged and pushed. Specs/plans under `docs/superpowers/{specs,plans}/` (`2026-11-22-map-editor-items-*`). Next: P2c terrain (each own brainstorm/spec/plan), spike S, villagers/collections. 219 unit tests + 4 e2e pass with `NHSE_TEST_SAVE`.
 - **Spike S (personal sprite pipeline) not started**: decode a model from `~/Games/ACNH/romfs` (zstd `.zs`, BFRES) and render a top-down/iso PNG named `NNNNN_V.png` into git-ignored `personal-sprites/`; import via the Map page. Never commit Nintendo art. Time-boxed, no product code.
 
 ## Resume commands
@@ -40,8 +40,13 @@ bun run gen:data                                       # regenerates generated/*
 - Hash warning is a dismissible banner; spec says warn before allowing edits.
 - The E2E test leaves a zip of the personal save in os.tmpdir(); an untracked git-ignored `test-results/` dir may exist.
 
-## P2b buildings (in progress)
-Spec `docs/superpowers/specs/2026-11-22-map-editor-buildings-design.md` and plan `docs/superpowers/plans/2026-11-22-map-editor-buildings.md` are written and committed (97b725f, 9c4a07c), not yet approved for execution by the owner. Execution: native inline, TDD, every deviation a `Ruling:` line in the commit body, report all Rulings at the end. Task 1 first (confirm stored building units/rules against the example save; stop and report if the unit reading is wrong). Local commits are ahead of origin; do not push without asking.
+## P2b buildings + plaza (done, local commits, not pushed)
+- **Op:** `buildingEdit { label, changes: {slot 0-45, building}[], plaza?: {x,z} }` (`packages/core/src/map/applyBuildingEdit.ts`): `planBuildingEdit` validates the final state of *changed* entries only (field rules only for changed fields; geometry rules only when x/y/type or plaza position changed), `writeBuildingEdit` writes differing slots/plaza (retype/move keep bytes 14-19, clear zeroes 20). Rules: known type 1-29/42, angle 0-3, uniqueId unique (0 exempt), unique type except 26/27, footprint inside item area, no overlap with buildings/plaza (types 20 and 23 may stand in the plaza), no items under it (refused, never cleared), land under it except 26/27. Stored x/y are world item-tile units (confirmed on the example save; `tests/golden/buildingRules.test.ts` pins its exceptions: Airport on water, tent over items, plaza furniture).
+- **Oracle:** `reference/Commands/BuildingEdit.cs` (via `edit`), byte-identical golden in `tests/golden/buildingEdit.test.ts`.
+- **Worker/viewer:** `api.buildingPlan(op)`; edit/undo/redo return `structures` (buildings+plaza) when building/plaza bytes were patched; `MapStore.patchStructures`, `MapScene.invalidateBuildings`, `onStructuresTouched` in `state.svelte.ts`. UI: `app/src/map/buildingTool.ts` (pure), `BuildingPanel.svelte`, "Buildings" tool in `MapToolbar`/`MapSection` (click select, drag move with ghost, add mode, panel fields; subType/typeArg/bit labeled unverified).
+- **Fixed on the way:** `MapSection` reloaded the map and dropped to View mode after every edit because `refreshSummary` replaces `app.loaded`; effects now key on `app.loadEpoch` (bumped only when a save is opened).
+- Tests: 219 unit/golden + 4 e2e pass with `NHSE_TEST_SAVE`. Set `TMPDIR` to a roomy dir for test runs: golden/e2e tests leave 23 MB copies of the save in the temp dir.
+- Known gaps: single-instance/bridge/incline/ground rules are inferred, not game-verified; subType/typeArg/bit are free; Airport cannot be moved along the shore (strict ground rule); building sprites are still colored boxes; real mouse drag untested outside headless.
 
 ## Next
-Finish map-viewer (Tasks 11-12 + final review + merge decision), then P2 map editor (brushes, undo, placement; own brainstorm), spike S in parallel, villagers/collections later.
+P2c terrain (own brainstorm/spec/plan), spike S (personal sprite pipeline, time-boxed), villagers/collections later.

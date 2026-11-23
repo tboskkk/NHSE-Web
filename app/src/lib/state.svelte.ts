@@ -12,6 +12,8 @@ export const api = createClient();
 
 export const app = $state({
   loaded: null as LoadResult | null,
+  /** Bumped only when a different save is opened (not when edits refresh the summary). */
+  loadEpoch: 0,
   section: "player" as Section,
   playerIndex: 0,
   history: [] as string[],
@@ -51,6 +53,7 @@ async function load(getFiles: () => Promise<{ files: Map<string, Uint8Array>; fo
     const { files, folder } = await getFiles();
     const result = await api.load(files, app.lang);
     app.loaded = result;
+    app.loadEpoch++;
     app.folder = folder ?? null;
     app.history = [];
     app.savedCount = 0;
