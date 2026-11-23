@@ -46,3 +46,16 @@ export function atlas(cells: Uint8Array[], size: number): { width: number; heigh
   });
   return { width, height: size, data };
 }
+
+/** A colour albedo (RGBA, no ramp) resampled to `size`; alpha from the opacity map when there is one, else from the texture. */
+export function bakeColourCell(rgba: { width: number; height: number; data: Uint8Array }, opacity: Grey | null, size: number): Uint8Array {
+  const out = new Uint8Array(size * size * 4);
+  for (let y = 0; y < size; y++) {
+    for (let x = 0; x < size; x++) {
+      const o = (Math.floor((y * rgba.height) / size) * rgba.width + Math.floor((x * rgba.width) / size)) * 4;
+      const a = opacity ? (opacity.data[Math.floor((y * opacity.height) / size) * opacity.width + Math.floor((x * opacity.width) / size)]! < OPACITY_CUTOFF ? 0 : 255) : rgba.data[o + 3]!;
+      out.set([rgba.data[o]!, rgba.data[o + 1]!, rgba.data[o + 2]!, a], (y * size + x) * 4);
+    }
+  }
+  return out;
+}

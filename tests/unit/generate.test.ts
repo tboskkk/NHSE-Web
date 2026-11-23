@@ -7,7 +7,7 @@ import type { BntxTexture } from "../../scripts/sprites/bntx";
 import { generateModels, type ModelSource } from "../../scripts/models/generate";
 import type { DumpedModel } from "../../scripts/models/plantFile";
 import type { PlantRef } from "../../scripts/models/fgmain";
-import { swizzle } from "./spriteFixtures";
+import { solidBc1, swizzle } from "./spriteFixtures";
 
 /** One BC4 block of a single grey value, as a 4x4 BNTX texture. */
 function greyTex(name: string, g: number): BntxTexture {
@@ -102,4 +102,16 @@ test("a second run produces identical bytes", async () => {
   await generateModels({ out: a }, items, src);
   await generateModels({ out: b }, items, src);
   for (const p of ["models.json", "geo/PltT1.bin", "tex/PltT_PltT1_-.png", "tex/PltT_PltT1_1.png"]) expect(read(a, p)).toEqual(read(b, p));
+});
+
+test("a material with a plain colour albedo (_Alb, no ramp) bakes its own colours, found through the material's texture list", async () => {
+  const colour = solidBc1("mW_Alb", 0xf800); // red
+  const src2: ModelSource = {
+    fgMain: async () => new Map([["Weed", { file: "PltW", model: "PltW1", colour: null }]]),
+    plant: async () => ({ models: [model("PltW1", [["mW", ["mW_Alb"]]], [["mW", "s"]])], textures: [colour as BntxTexture] }),
+  };
+  const dir = out();
+  const r = await generateModels({ out: dir }, { "70000": { name: "Weed" } }, src2);
+  expect(r.items).toBe(1);
+  expect(r.skipped).toBe(0);
 });

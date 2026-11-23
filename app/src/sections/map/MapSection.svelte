@@ -419,7 +419,7 @@
     </fieldset>
     <div class="pack">
       <span class="muted" data-testid="sprite-status">sprites: {packUrls.size} loaded</span>
-      <span class="muted" data-testid="model-status">models: {models?.models.size ?? 0} loaded</span>
+      {#if models}<span class="muted" data-testid="model-status">models: {models.models.size} loaded</span>{/if}
       <label class="btn">Import folder<input type="file" webkitdirectory multiple hidden onchange={onpick} /></label>
       <label class="btn">Import .zip<input type="file" accept=".zip" hidden onchange={onpick} /></label>
       <button onclick={clearPack} disabled={packUrls.size === 0 && !models}>Clear</button>

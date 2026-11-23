@@ -4,7 +4,7 @@ import { join } from "node:path";
 import { type Geometry, encodeGeometry, type Manifest } from "../../app/src/map3d/modelFormat";
 import { type BntxTexture, decodeTexture } from "../sprites/bntx";
 import { encodePng } from "../sprites/png";
-import { atlas, bakeCell, type Grey, pickRow, type Ramp } from "./bake";
+import { atlas, bakeCell, bakeColourCell, type Grey, pickRow, type Ramp } from "./bake";
 import { runHelper } from "../sprites/helper";
 import { joinFieldItems, parseFgMain, type PlantRef } from "./fgmain";
 import { type DumpedModel, loadPlantFile } from "./plantFile";
@@ -48,12 +48,14 @@ function bakeAtlas(materials: DumpedModel["materials"], textures: BntxTexture[],
     return decodeTexture(t);
   };
   const cells = materials.map((mat) => {
-    const a = need(`${mat.name}_AlbGry`);
-    const opName = `${mat.name}_OP`;
+    const albName = mat.textures.find((n) => /_Alb(Gry)?$/.test(n)) ?? `${mat.name}_AlbGry`;
+    const a = need(albName);
+    const opName = mat.textures.find((n) => n.endsWith("_OP")) ?? `${mat.name}_OP`;
     const op = find(opName) ? need(opName) : null;
+    const grey = (d: ReturnType<typeof decodeTexture>): Grey => ({ width: d.width, height: d.height, data: d.data });
+    if (a.channels === 4) return bakeColourCell(a, op ? grey(op) : null, CELL); // plain colour albedo: no ramp
     const rampName = mat.textures.find((n) => n.endsWith("_Grd"));
     const r = rampName ? need(rampName) : null;
-    const grey = (d: ReturnType<typeof decodeTexture>): Grey => ({ width: d.width, height: d.height, data: d.data });
     const ramp: Ramp | null = r ? { width: r.width, height: r.height, data: r.data } : null;
     return bakeCell(grey(a), op ? grey(op) : null, ramp, ramp && rampName ? pickRow(ramp, rampKind(rampName), colour) : 0, CELL);
   });

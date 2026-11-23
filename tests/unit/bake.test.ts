@@ -45,3 +45,14 @@ test("atlas places cells side by side in order", () => {
   expect([at.width, at.height, at.data.length]).toEqual([8, 4, 8 * 4 * 4]);
   expect([at.data[0], at.data[4 * 4], at.data[(1 * 8 + 3) * 4], at.data[(1 * 8 + 4) * 4]]).toEqual([10, 200, 10, 200]);
 });
+
+import { bakeColourCell } from "../../scripts/models/bake";
+
+test("bakeColourCell keeps a colour albedo's RGB, resamples it and takes alpha from the opacity map", () => {
+  const rgba = { width: 2, height: 1, data: Uint8Array.of(10, 20, 30, 255, 200, 210, 220, 255) };
+  const px = bakeColourCell(rgba, null, 4);
+  expect([...px.subarray(0, 4)]).toEqual([10, 20, 30, 255]);
+  expect([...px.subarray(12, 16)]).toEqual([200, 210, 220, 255]);
+  const op = { width: 1, height: 1, data: Uint8Array.of(50) };
+  expect(bakeColourCell(rgba, op, 2)[3]).toBe(0);
+});
