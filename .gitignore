@@ -16,3 +16,5 @@ scripts/spike-s/**/obj/
 scripts/spike-s/bcsv/*.tsv
 scripts/spike-s/*.png
 __pycache__/
+scripts/sprites/dotnet/bin/
+scripts/sprites/dotnet/obj/
