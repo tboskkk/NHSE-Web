@@ -6,6 +6,7 @@ import { applyOp, type EditOp } from "../../packages/core/src/edit/ops";
 import { planTerrainEdit, terrainTileAt, type TerrainEditOp, type TerrainTileValue } from "../../packages/core/src/map/applyTerrainEdit";
 import { readMap } from "../../packages/core/src/map/mapData";
 import { HorizonSave } from "../../packages/core/src/save/horizonSave";
+import { rotateOp } from "../../app/src/map/terrainTool";
 import { goldenTest, readDir, REPO, runReference, SAVE, tempDir } from "./helpers";
 
 const acreTiles = () => new Uint8Array(readFileSync(join(REPO, "app/public/data/acretiles.bin")));
@@ -38,7 +39,7 @@ goldenTest("terrainEdit is byte-identical to upstream (stamp ground, elevation, 
   const ops: EditOp[] = [
     top([stampTile(stamps[0]!)], "stamp ground"),
     top([{ x: elev!.x, y: elev!.y, tile: { ...terrainTileAt(map, H * elev!.x + elev!.y), elevation: 1 } }], "elevation"),
-    top([{ x: rot!.x, y: rot!.y, tile: rot!.tile, rotate: true } as TerrainEditOp["changes"][number]], "rotate"),
+    { ...rotateOp(map, [rot!]), changes: rotateOp(map, [rot!]).changes.map((c) => ({ ...c, rotate: true })) } as EditOp,
     { op: "batch", label: "batch", ops: [top([stampTile(stamps[1]!)]), top([stampTile(stamps[2]!), stampTile(stamps[3]!)])] },
   ];
 

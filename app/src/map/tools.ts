@@ -1,4 +1,4 @@
-export type Tool = "place" | "erase" | "rect" | "clearRect" | "eyedropper" | "building";
+export type Tool = "place" | "erase" | "rect" | "clearRect" | "eyedropper" | "building" | "terrain";
 export type Tile = { x: number; y: number };
 export type Rect = { x0: number; y0: number; x1: number; y1: number };
 export type StrokeResult = { tool: Tool; layer: 0 | 1; tiles: Tile[]; rect: Rect | null };
