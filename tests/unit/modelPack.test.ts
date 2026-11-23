@@ -63,3 +63,37 @@ test("the model store keeps its own key and falls back to memory without Indexed
   expect((await store.load()).size).toBe(0);
   expect(typeof modelPackStore.save).toBe("function");
 });
+
+function terrainPack() {
+  const g: Geometry = { ...geo(), groups: [{ start: 0, count: 3, material: 0 }] };
+  const bytes = encodeGeometry(g);
+  const manifest = {
+    version: 1,
+    items: {},
+    models: {
+      "P_0": { geometry: "geo/P_0.bin", texture: "tex/terrain/a.png", textures: ["tex/terrain/a.png", "tex/terrain/b.png"] },
+      "Q_0": { geometry: "geo/Q_0.bin", texture: "tex/terrain/a.png", textures: ["tex/terrain/a.png", "tex/terrain/missing.png"] },
+    },
+    terrain: { "1_0": "P_0", "2_0": "Q_0" },
+  };
+  return [
+    { name: "models.json", data: enc(JSON.stringify(manifest)) },
+    { name: "geo/P_0.bin", data: bytes },
+    { name: "geo/Q_0.bin", data: bytes },
+    { name: "tex/terrain/a.png", data: png },
+    { name: "tex/terrain/b.png", data: png },
+  ];
+}
+
+test("parseModelPack loads terrain pieces with all their textures and keeps the terrain table for loaded pieces only", () => {
+  const r = parseModelPack(terrainPack());
+  expect([...r.models.keys()]).toEqual(["P_0"]);
+  expect(r.skipped).toBe(1); // Q_0: its second texture is missing
+  expect(r.models.get("P_0")!.textures).toEqual([png, png]);
+  expect(r.models.get("P_0")!.geometry.groups).toEqual([{ start: 0, count: 3, material: 0 }]);
+  expect([...r.terrain]).toEqual([["1_0", "P_0"]]);
+});
+
+test("a plant-only pack has an empty terrain table", () => {
+  expect(parseModelPack(pack()).terrain.size).toBe(0);
+});

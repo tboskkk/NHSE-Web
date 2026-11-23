@@ -1,7 +1,13 @@
 import { createPackStore } from "../map/spritePack";
 import { decodeGeometry, type Geometry, parseManifest } from "./modelFormat";
 
-export type LoadedModels = { items: Map<number, string>; models: Map<string, { geometry: Geometry; texture: Uint8Array /* PNG */ }> };
+export type LoadedModels = {
+  items: Map<number, string>;
+  /** `textures` (terrain pieces) holds one PNG per material group, in group order; `texture` is the first. */
+  models: Map<string, { geometry: Geometry; texture: Uint8Array /* PNG */; textures?: Uint8Array[] }>;
+  /** Terrain pieces: `"<unitId>_<variation>"` -> model key (only pieces that loaded). */
+  terrain: Map<string, string>;
+};
 type PackFile = { name: string; data: Uint8Array };
 
 const PNG_MAGIC = [0x89, 0x50, 0x4e, 0x47];
@@ -29,17 +35,26 @@ export function parseModelPack(files: PackFile[]): LoadedModels & { skipped: num
   let skipped = 0;
   for (const [key, e] of Object.entries(manifest.models)) {
     try {
-      const g = find(e.geometry), t = find(e.texture);
+      const g = find(e.geometry);
       if (!g) throw new Error("geometry file missing");
-      if (!t || !PNG_MAGIC.every((b, i) => t[i] === b)) throw new Error("texture missing or not a PNG");
-      models.set(key, { geometry: decodeGeometry(g), texture: t });
+      const png = (rel: string) => {
+        const t = find(rel);
+        if (!t || !PNG_MAGIC.every((b, i) => t[i] === b)) throw new Error("texture missing or not a PNG");
+        return t;
+      };
+      if (e.textures) {
+        const textures = e.textures.map(png);
+        models.set(key, { geometry: decodeGeometry(g), texture: textures[0]!, textures });
+      } else models.set(key, { geometry: decodeGeometry(g), texture: png(e.texture) });
     } catch {
       skipped++;
     }
   }
   const items = new Map<number, string>();
   for (const [id, key] of Object.entries(manifest.items)) if (models.has(key)) items.set(Number(id), key);
-  return { items, models, skipped };
+  const terrain = new Map<string, string>();
+  for (const [k, key] of Object.entries(manifest.terrain ?? {})) if (models.has(key)) terrain.set(k, key);
+  return { items, models, terrain, skipped };
 }
 
 /** The raw pack files, kept in IndexedDB beside the sprite pack (own key); an IndexedDB failure degrades to memory. */
