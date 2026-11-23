@@ -28,7 +28,7 @@ async function openMap(page: Page) {
   await expect(page.getByRole("heading", { level: 1 })).toBeVisible();
   await page.getByRole("button", { name: "Map", exact: true }).click();
   await expect(page.locator("[data-testid=map-host][data-ready=true]")).toBeVisible({ timeout: 60_000 });
-  await page.addStyleTag({ content: ".toast { visibility: hidden; }" });
+  await page.addStyleTag({ content: ".toast, .pill { visibility: hidden; }" });
 }
 
 test("3D view renders the island, responds to the camera keys and returns to 2D", async ({ page }) => {

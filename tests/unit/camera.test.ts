@@ -43,3 +43,22 @@ test("a zero-size view or non-finite input leaves the camera unchanged and finit
   const z = zoomAt(c, NaN, 5, 5, bounds, view);
   expect(Number.isFinite(z.x) && Number.isFinite(z.y) && Number.isFinite(z.zoom)).toBe(true);
 });
+
+import { fitRect } from "../../app/src/map/camera";
+
+test("fitRect zooms to the tighter axis and centres the rectangle", () => {
+  const c = fitRect({ x: 100, y: 50, w: 400, h: 200 }, { w: 800, h: 800 });
+  expect(c.zoom).toBe(2); // width limits: 800 / 400
+  expect(c.x).toBe(100); // rect.x - (view.w / zoom - rect.w) / 2 = 100 - 0
+  expect(c.y).toBe(-50); // centred vertically: rect centre y 150 minus half the visible height (800 / 2 / 2 = 200)
+  const tall = fitRect({ x: 0, y: 0, w: 100, h: 400 }, { w: 800, h: 400 });
+  expect(tall.zoom).toBe(1);
+  expect(tall.x).toBe(-350); // rect centre x 50 minus half the visible width 400
+});
+
+test("fitRect clamps the zoom and ignores degenerate input", () => {
+  expect(fitRect({ x: 0, y: 0, w: 1, h: 1 }, { w: 1000, h: 1000 }).zoom).toBe(8); // MAX_ZOOM
+  expect(fitRect({ x: 0, y: 0, w: 100000, h: 100000 }, { w: 100, h: 100 }).zoom).toBe(0.05); // MIN_ZOOM
+  expect(fitRect({ x: 0, y: 0, w: 0, h: 10 }, { w: 100, h: 100 })).toEqual({ x: 0, y: 0, zoom: 1 });
+  expect(fitRect({ x: 0, y: 0, w: 10, h: 10 }, { w: 0, h: 100 })).toEqual({ x: 0, y: 0, zoom: 1 });
+});

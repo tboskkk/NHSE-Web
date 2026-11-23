@@ -13,10 +13,11 @@
   import { clearRoadOp, elevationOp, keepPlannable, rotateOp, stampOp, terrainTileUnder, type StampPart, type TerrainMode } from "../../map/terrainTool";
   import { addOp, hitTarget, moveOp, reconcileSelection, targetRect, type Target } from "../../map/buildingTool";
   import MapBrush from "../../map/MapBrush.svelte";
+  import MapMenu from "../../map/MapMenu.svelte";
   import MapToolbar from "../../map/MapToolbar.svelte";
   import { createMapStore, type MapStore } from "../../map/mapStore";
   import type { Ghost, LayerId } from "../../map/scene";
-  import { createStroke, type Stroke, type Tool } from "../../map/tools";
+  import { createStroke, type Stroke, type Tool, toolForKey } from "../../map/tools";
   import { createSpriteSource } from "../../map/spriteSource";
   import { importPack, packStore } from "../../map/spritePack";
   import { isModelPack, type LoadedModels, modelPackStore, parseModelPack } from "../../map3d/modelPack";
@@ -50,6 +51,8 @@
   const blocked = $derived((app.loaded?.invalidHashes.length ?? 0) > 0 && !app.hashWarningDismissed ? "Dismiss the hash warning above to enable editing." : null);
   let view = $state<"2d" | "3d">("2d");
   let error3d = $state<string | null>(null);
+  $effect(() => { if (view === "2d") error3d = null; });
+  const assetBadge = $derived(packUrls.size + (models?.models.size ?? 0) > 0 ? String(packUrls.size + (models?.models.size ?? 0)) : "");
   const editing = $derived(mode === "edit" && blocked === null);
   // building tool: selection, drag and add-mode state (raw: ops are posted to the worker)
   let selected = $state.raw<Target | null>(null);
@@ -321,7 +324,7 @@
   function onkey(e: KeyboardEvent) {
     if (!editing || e.ctrlKey || e.metaKey || e.altKey) return;
     if ((e.target as HTMLElement | null)?.matches?.("input, textarea, select, [contenteditable]")) return;
-    const k = ({ p: "place", e: "erase", r: "rect", c: "clearRect", i: "eyedropper", b: "building", t: "terrain" } as Record<string, Tool>)[e.key.toLowerCase()];
+    const k = toolForKey(e.key);
     if (k) tool = k;
   }
 
@@ -404,31 +407,37 @@
 <svelte:window onkeydown={onkey} />
 
 <div class="map">
-  <h1>Map <span class="muted">· {editing ? (tool === "building" ? "editing buildings" : tool === "terrain" ? "editing terrain" : "editing items") : "viewer"}</span></h1>
-  <MapToolbar bind:mode bind:layer={editLayer} bind:tool {blocked} />
-  <div class="seg" role="group" aria-label="View">
-    <button data-testid="view2d" class:on={view === "2d"} aria-pressed={view === "2d"} onclick={() => { view = "2d"; error3d = null; }}>2D</button>
-    <button data-testid="view3d" class:on={view === "3d"} aria-pressed={view === "3d"} onclick={() => (view = "3d")}>3D</button>
+  <div class="titlebar">
+    <h2>Map</h2>
+    <span class="chip" class:on={editing}>{editing ? (tool === "building" ? "Editing buildings" : tool === "terrain" ? "Editing terrain" : "Editing items") : "Viewing"}</span>
   </div>
-  <div class="bar">
-    <fieldset>
-      <legend class="visually-hidden">Layers</legend>
-      {#each LABELS as [id, label] (id)}
-        <label><input type="checkbox" bind:checked={layers[id]} /> {label}</label>
-      {/each}
-    </fieldset>
-    <div class="pack">
-      <span class="muted" data-testid="sprite-status">sprites: {packUrls.size} loaded</span>
-      {#if models}<span class="muted" data-testid="model-status">models: {models.models.size} loaded</span>{/if}
-      <label class="btn">Import folder<input type="file" webkitdirectory multiple hidden onchange={onpick} /></label>
-      <label class="btn">Import .zip<input type="file" accept=".zip" hidden onchange={onpick} /></label>
-      <button onclick={clearPack} disabled={packUrls.size === 0 && !models}>Clear</button>
-    </div>
-  </div>
+  <MapToolbar bind:mode bind:layer={editLayer} bind:tool bind:view {blocked}>
+    {#snippet right()}
+      <MapMenu label="Layers">
+        <fieldset>
+          <legend class="visually-hidden">Layers</legend>
+          {#each LABELS as [id, label] (id)}
+            <label><input type="checkbox" bind:checked={layers[id]} /> {label}</label>
+          {/each}
+        </fieldset>
+      </MapMenu>
+      <MapMenu label="Assets" badge={assetBadge}>
+        <span class="muted" data-testid="sprite-status">sprites: {packUrls.size} loaded</span>
+        {#if models}<span class="muted" data-testid="model-status">models: {models.models.size} loaded</span>{/if}
+        <p class="muted help">Import your own sprite pack or model pack (a folder or .zip made by <code>gen:sprites</code> / <code>gen:models</code>). Packs stay in this browser.</p>
+        <div class="pack">
+          <label class="btn">Import folder<input type="file" webkitdirectory multiple hidden onchange={onpick} /></label>
+          <label class="btn">Import .zip<input type="file" accept=".zip" hidden onchange={onpick} /></label>
+          <button onclick={clearPack} disabled={packUrls.size === 0 && !models}>Clear</button>
+        </div>
+      </MapMenu>
+    {/snippet}
+  </MapToolbar>
   {#if error}
     <p class="err" role="alert">The map could not be shown: {error}. Nothing in your save was changed.</p>
   {:else if map && acreTiles}
     <div class="stage">
+      <div class="viewport">
       {#if view === "3d"}
         {#if error3d}
           <div class="err" role="alert">
@@ -457,19 +466,18 @@
         <p class="err" role="alert">The map viewer could not be loaded: {e instanceof Error ? e.message : String(e)}</p>
       {/await}
       {/if}
+      {#if editing}<div class="pill" data-testid="map-status" role="status">{status}</div>{/if}
+      </div>
       <div class="side">
         {#if editing && tool === "building" && store}
           <BuildingPanel map={store.map} {version} {acreW} bind:selected bind:addType />
-          <p class="status" data-testid="map-status" role="status">{status}</p>
         {:else if editing && tool === "terrain" && store}
           <TerrainPanel map={store.map} {version} bind:mode={tmode} bind:delta={tdelta} bind:part={tpart} bind:picked />
-          <p class="status" data-testid="map-status" role="status">{status}</p>
         {:else if editing}
           <MapBrush bind:raw={brush} />
           <BulkPanel {brush} {brushName} />
-          <p class="status" data-testid="map-status" role="status">{status}</p>
         {/if}
-        <Inspector {info} />
+        <div class="inspector"><Inspector {info} /></div>
       </div>
     </div>
   {:else}
@@ -479,18 +487,23 @@
 
 <style>
   .map { display: flex; flex-direction: column; gap: 10px; height: 100%; min-height: 0; }
-  h1 { margin: 0; font-size: 1.2rem; }
-  .bar { display: flex; flex-wrap: wrap; gap: 10px 20px; align-items: center; justify-content: space-between; }
-  fieldset { display: flex; flex-wrap: wrap; gap: 4px 14px; border: 0; padding: 0; margin: 0; }
+  .titlebar { display: flex; align-items: baseline; gap: 10px; }
+  h2 { margin: 0; font-size: 1.2rem; }
+  .chip { font-size: 0.8rem; padding: 1px 10px; border-radius: 999px; background: var(--surface-2); color: var(--muted); border: 1px solid var(--border); }
+  .chip.on { background: var(--accent); color: var(--accent-text); border-color: var(--accent); }
+  fieldset { display: flex; flex-direction: column; gap: 6px; border: 0; padding: 0; margin: 0; }
+  fieldset label { display: flex; align-items: center; gap: 8px; cursor: pointer; }
   .pack { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+  .help { margin: 0; font-size: 0.8rem; max-width: 18rem; }
   .btn { font: inherit; background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); padding: 6px 12px; cursor: pointer; }
   .btn:hover { background: var(--surface-2); }
   .stage { display: flex; gap: 12px; flex: 1; min-height: 0; }
-  .side { display: flex; flex-direction: column; gap: 12px; width: 15rem; flex: none; overflow-y: auto; }
-  .status { margin: 0; min-height: 1.2em; font-size: 0.85rem; }
+  .viewport { position: relative; display: flex; flex: 1; min-width: 0; min-height: 0; }
+  .pill { position: absolute; top: 10px; left: 50%; transform: translateX(-50%); z-index: 5; max-width: 80%; padding: 4px 12px; border-radius: 999px; font-size: 0.85rem; background: var(--surface); border: 1px solid var(--border); box-shadow: 0 2px 8px rgb(0 0 0 / 0.15); pointer-events: none; }
+  .pill:empty { display: none; }
+  .side { display: flex; flex-direction: column; gap: 10px; width: 16rem; flex: none; overflow-y: auto; }
+  .side > :global(section) { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); padding: 10px 12px; }
+  .inspector { margin-top: auto; }
   .err { color: var(--error); }
-  .seg { display: inline-flex; align-self: flex-start; border: 1px solid var(--border); border-radius: var(--radius); overflow: hidden; }
-  .seg button { border: 0; border-radius: 0; }
-  .seg button.on { background: var(--accent); color: var(--accent-text); }
-  @media (max-width: 640px) { .stage { flex-direction: column; } }
+  @media (max-width: 640px) { .stage { flex-direction: column; } .side { width: auto; } }
 </style>

@@ -46,6 +46,7 @@ test("map viewer renders, inspects and toggles layers", async ({ page }) => {
   await expect(page.getByRole("complementary", { name: "Tile inspector" }).getByText(/\(\d+, \d+\)/).first()).toBeVisible();
 
   // Terrain off changes the picture.
+  await page.getByRole("button", { name: "Layers" }).click(); // the layer checkboxes live in the Layers menu
   await page.getByLabel("Terrain", { exact: true }).uncheck();
   await expect.poll(async () => !(await shot()).equals(full)).toBe(true);
 

@@ -34,7 +34,7 @@ test("pick, stamp, refuse a fixed acre, undo/redo, save, reload", async ({ page 
     await expect(page.getByRole("heading", { level: 1 })).toBeVisible();
     await page.getByRole("button", { name: "Map", exact: true }).click();
     await expect(page.locator("[data-testid=map-host][data-ready=true]")).toBeVisible({ timeout: 60_000 });
-    await page.addStyleTag({ content: ".toast { visibility: hidden; }" });
+    await page.addStyleTag({ content: ".toast, .pill { visibility: hidden; }" });
   };
   await openMap(input);
 
@@ -87,7 +87,13 @@ test("pick, stamp, refuse a fixed acre, undo/redo, save, reload", async ({ page 
     if (((await status.textContent()) ?? "") === "") {
       await page.mouse.down();
       await page.mouse.up();
-      try { await expect(page.getByRole("button", { name: unsaved(1) })).toBeVisible({ timeout: 1000 }); stamped = true; break; } catch { /* identical tile or refused: next */ }
+      try {
+        await expect(page.getByRole("button", { name: unsaved(1) })).toBeVisible({ timeout: 1000 });
+        if (!(await shot()).equals(before)) { stamped = true; break; }
+        await canvas.focus();
+        await page.keyboard.press("Control+z"); // a stamp that changes nothing visible: undo it and try the next spot
+        await expect(page.getByRole("button", { name: unsaved(0) })).toBeVisible();
+      } catch { /* identical tile or refused: next */ }
     }
   }
   expect(stamped).toBe(true);

@@ -31,3 +31,11 @@ export function makeLayout(itemAcreWidth: number): Layout {
 
 /** Buildings are drawn (and hit-tested) as squares this many item tiles wide (upstream imgScale * 2). */
 export const BUILDING_TILES = 4;
+
+/** The area "fit" frames: the terrain grid (7 x 6 acres, one acre in) plus a quarter acre of shore and sea around it. */
+export const ISLAND_FIT_PX = {
+  x: (1 - 0.25) * ACRE_ITEM_TILES * PX_PER_ITEM_TILE,
+  y: (1 - 0.25) * ACRE_ITEM_TILES * PX_PER_ITEM_TILE,
+  w: (7 + 0.5) * ACRE_ITEM_TILES * PX_PER_ITEM_TILE,
+  h: (6 + 0.5) * ACRE_ITEM_TILES * PX_PER_ITEM_TILE,
+} as const;

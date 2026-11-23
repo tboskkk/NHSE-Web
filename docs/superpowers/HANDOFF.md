@@ -95,5 +95,10 @@ bun run gen:data                                       # regenerates generated/*
 - Tests: unit (unit table, bake rules, generator on synthetic fixtures, NMD2 format, pack parse, grouping, mesh mask), romfs-gated golden and e2e (`tests/e2e/map3dTerrain.spec.ts`: import changes the picture, a terrain stamp redraws and undoes, Clear restores the flat look).
 - Known gaps: roads unverified by eye (the example save has none); grass is a fixed colour (no season, no ground texture/edge blend); river water is a flat translucent sheet (no animation or flow); static acres/ocean/beach unchanged; `Cliff8` piece missing in the romfs table; per-material textures resample cliff/river to 256 px.
 
+## Map editor UI pass (done, local commit)
+- One toolbar row shared by 2D and 3D (`app/src/map/MapToolbar.svelte`): View/Edit, 2D/3D, tool groups with icons (items, buildings, terrain; hotkeys in tooltips; `TOOL_INFO` in `tools.ts` is the single source for labels, keys, groups and hints), the item-layer chooser only for item tools, and two dropdowns (`MapMenu.svelte`): **Layers** (the layer checkboxes) and **Assets** (sprite/model import, status, Clear). Menu contents stay in the DOM (hidden) so file inputs and status text remain reachable.
+- Status/refusal line is a pill over the canvas (`data-testid="map-status"`, hidden when empty); side panels are cards with equal-width segmented controls and the Inspector pinned to the bottom; the 2D view fits the island (`fitRect` + `ISLAND_FIT_PX`), not the whole sea; heading is `Map` plus a mode chip. The toolbar stays one row in Edit mode so the map does not resize when entering it.
+- E2E notes: tests hide `.toast, .pill`; layer toggles and Clear need the menus opened first; 3D screenshot waits are 700 ms (software GL).
+
 ## Next
 Buildings (spike first), fences/rocks/shells, season selector, static acres and ocean. Optional: villagers/collections sprites; scan more saves for roads; hash-warning gate; touch testing.

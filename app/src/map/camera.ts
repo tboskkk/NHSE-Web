@@ -37,3 +37,10 @@ export function panBy(c: Camera, dx: number, dy: number, bounds: Bounds, view: V
   if (!finite(c.x, c.y, c.zoom, dx, dy) || !validView(view)) return c;
   return clampCamera({ x: c.x - dx / c.zoom, y: c.y - dy / c.zoom, zoom: c.zoom }, bounds, view);
 }
+
+/** The camera that shows `rect` as large as possible and centred in `view`. */
+export function fitRect(rect: { x: number; y: number; w: number; h: number }, view: View): Camera {
+  if (!(rect.w > 0 && rect.h > 0) || !validView(view)) return { x: 0, y: 0, zoom: 1 };
+  const zoom = clamp(Math.min(view.w / rect.w, view.h / rect.h), MIN_ZOOM, MAX_ZOOM);
+  return { x: rect.x + rect.w / 2 - view.w / zoom / 2, y: rect.y + rect.h / 2 - view.h / zoom / 2, zoom };
+}

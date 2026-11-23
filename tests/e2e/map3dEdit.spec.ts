@@ -28,7 +28,7 @@ async function openMap3d(page: Page, zip: string) {
   await expect(page.getByRole("heading", { level: 1 })).toBeVisible();
   await page.getByRole("button", { name: "Map", exact: true }).click();
   await expect(page.locator("[data-testid=map-host][data-ready=true]")).toBeVisible({ timeout: 60_000 });
-  await page.addStyleTag({ content: ".toast { visibility: hidden; }" });
+  await page.addStyleTag({ content: ".toast, .pill { visibility: hidden; }" });
   await page.getByTestId("view3d").click();
   await expect(page.locator("[data-testid=map3d-host][data-ready=true]")).toBeVisible({ timeout: 30_000 });
   await page.waitForTimeout(800);
@@ -45,7 +45,7 @@ test("3D: place, refuse, undo/redo, fill, terrain stamp, 2D/3D switch, save, rel
   const status = page.getByTestId("map-status");
   const shot = async () => {
     await page.mouse.move(0, 0); // off the canvas: no ghost in the picture
-    await page.waitForTimeout(250);
+    await page.waitForTimeout(700);
     const b = (await canvas.boundingBox())!;
     return page.screenshot({ clip: { x: b.x + 10, y: b.y + 10, width: b.width - 20, height: b.height - 20 } });
   };
@@ -191,7 +191,7 @@ test("3D edit mode: right-drag orbits and Space+drag pans, a plain left-drag doe
   const b = (await canvas.boundingBox())!;
   const shot = async () => {
     await page.mouse.move(0, 0);
-    await page.waitForTimeout(250);
+    await page.waitForTimeout(700);
     return page.screenshot({ clip: { x: b.x + 10, y: b.y + 10, width: b.width - 20, height: b.height - 20 } });
   };
   const cx = b.x + b.width / 2, cy = b.y + b.height / 2;

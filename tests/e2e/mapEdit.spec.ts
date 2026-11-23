@@ -33,7 +33,7 @@ test("place, refuse, undo/redo, save, reload; bulk weeds", async ({ page }) => {
     await expect(page.getByRole("heading", { level: 1 })).toBeVisible();
     await page.getByRole("button", { name: "Map", exact: true }).click();
     await expect(page.locator("[data-testid=map-host][data-ready=true]")).toBeVisible({ timeout: 60_000 });
-    await page.addStyleTag({ content: ".toast { visibility: hidden; }" }); // keep DOM overlays out of canvas screenshots
+    await page.addStyleTag({ content: ".toast, .pill { visibility: hidden; }" }); // keep DOM overlays out of canvas screenshots
   };
   await openMap(input);
 

@@ -1,5 +1,21 @@
 export type Tool = "place" | "erase" | "rect" | "clearRect" | "eyedropper" | "building" | "terrain";
 export type Tile = { x: number; y: number };
+
+export type ToolGroup = "items" | "structures" | "terrain";
+/** Toolbar order, labels, hotkeys and one-line hints for every tool. */
+export const TOOL_INFO: { id: Tool; label: string; key: string; group: ToolGroup; hint: string }[] = [
+  { id: "place", label: "Place", key: "p", group: "items", hint: "Place the brush item; drag to lay a row" },
+  { id: "erase", label: "Erase", key: "e", group: "items", hint: "Remove items" },
+  { id: "rect", label: "Fill area", key: "r", group: "items", hint: "Drag a rectangle to fill it with the brush" },
+  { id: "clearRect", label: "Clear area", key: "c", group: "items", hint: "Drag a rectangle to clear it" },
+  { id: "eyedropper", label: "Pick", key: "i", group: "items", hint: "Copy the item under the pointer into the brush" },
+  { id: "building", label: "Buildings", key: "b", group: "structures", hint: "Select, move and add buildings and the plaza" },
+  { id: "terrain", label: "Terrain", key: "t", group: "terrain", hint: "Stamp, raise, lower and rotate terrain tiles" },
+];
+
+export const toolForKey = (key: string): Tool | null => TOOL_INFO.find((t) => t.key === key.toLowerCase())?.id ?? null;
+/** The item layer chooser only matters for the item tools. */
+export const usesLayer = (t: Tool): boolean => TOOL_INFO.find((x) => x.id === t)?.group === "items";
 export type Rect = { x0: number; y0: number; x1: number; y1: number };
 export type StrokeResult = { tool: Tool; layer: 0 | 1; tiles: Tile[]; rect: Rect | null };
 

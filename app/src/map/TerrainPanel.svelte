@@ -52,9 +52,9 @@
 <style>
   .panel { display: flex; flex-direction: column; gap: 6px; }
   h2 { margin: 0; font-size: 1rem; }
-  .seg { display: inline-flex; flex-wrap: wrap; border: 1px solid var(--border); border-radius: var(--radius); overflow: hidden; }
-  .seg button { border: 0; border-radius: 0; }
-  .seg button.on { background: var(--accent); color: var(--accent-text); }
+  .seg { display: grid; grid-template-columns: repeat(auto-fill, minmax(4.4rem, 1fr)); gap: 4px; }
+  .seg button { padding: 5px 8px; }
+  .seg button.on { background: var(--accent); color: var(--accent-text); border-color: var(--accent); }
   dl { display: grid; grid-template-columns: auto 1fr; gap: 2px 8px; margin: 0; font-size: 0.85rem; }
   dt { color: var(--muted, inherit); }
   dd { margin: 0; }

@@ -41,7 +41,7 @@ test("terrain pieces appear after importing the pack, and a terrain stamp redraw
   await expect(page.getByRole("heading", { level: 1 })).toBeVisible();
   await page.getByRole("button", { name: "Map", exact: true }).click();
   await expect(page.locator("[data-testid=map-host][data-ready=true]")).toBeVisible({ timeout: 60_000 });
-  await page.addStyleTag({ content: ".toast { visibility: hidden; }" });
+  await page.addStyleTag({ content: ".toast, .pill { visibility: hidden; }" });
   await page.getByTestId("view3d").click();
   await expect(page.locator("[data-testid=map3d-host][data-ready=true]")).toBeVisible({ timeout: 30_000 });
   const canvas = page.getByTestId("map3d-canvas");
@@ -110,6 +110,7 @@ test("terrain pieces appear after importing the pack, and a terrain stamp redraw
   await page.keyboard.press("Control+z");
   await expect(page.getByRole("button", { name: unsaved(0) })).toBeVisible();
   const flatAgain = async () => (await shot()).equals(flat);
+  await page.getByRole("button", { name: /^Assets/ }).click(); // Clear lives in the Assets menu
   await page.getByRole("button", { name: "Clear", exact: true }).click();
   await expect(page.getByTestId("model-status")).toHaveCount(0);
   expect(await flatAgain()).toBe(true); // no pack: the flat look is back

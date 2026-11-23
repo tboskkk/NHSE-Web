@@ -39,7 +39,7 @@ test("importing a model pack changes the 3D picture, and Clear restores the bill
   await expect(page.getByRole("heading", { level: 1 })).toBeVisible();
   await page.getByRole("button", { name: "Map", exact: true }).click();
   await expect(page.locator("[data-testid=map-host][data-ready=true]")).toBeVisible({ timeout: 60_000 });
-  await page.addStyleTag({ content: ".toast { visibility: hidden; }" });
+  await page.addStyleTag({ content: ".toast, .pill { visibility: hidden; }" });
   await page.getByTestId("view3d").click();
   await expect(page.locator("[data-testid=map3d-host][data-ready=true]")).toBeVisible({ timeout: 30_000 });
   const canvas = page.getByTestId("map3d-canvas");
@@ -56,7 +56,8 @@ test("importing a model pack changes the 3D picture, and Clear restores the bill
   const withModels = await shot();
   expect(withModels.equals(before)).toBe(false);
 
-  await page.getByRole("button", { name: "Clear" }).click();
+  await page.getByRole("button", { name: /^Assets/ }).click(); // Clear lives in the Assets menu
+  await page.getByRole("button", { name: "Clear", exact: true }).click();
   await expect(page.getByTestId("model-status")).toHaveCount(0); // the label only shows while a model pack is loaded
   expect((await shot()).equals(before)).toBe(true);
 });

@@ -1,8 +1,8 @@
 <script lang="ts">
   import { onMount } from "svelte";
   import { buildingTypeName, type MapData } from "@nhse/core";
-  import { type Camera, MAX_ZOOM, MIN_ZOOM, panBy, zoomAt } from "./camera";
-  import { WORLD_PX } from "./layout";
+  import { type Camera, fitRect, panBy, zoomAt } from "./camera";
+  import { ISLAND_FIT_PX, WORLD_PX } from "./layout";
   import { createMapScene, type Ghost, type LayerId, type MapScene } from "./scene";
   import type { SpriteSource } from "./spriteSource";
   import { screenToTile } from "./tiles";
@@ -40,10 +40,7 @@
   let spaceDown = false;
 
   const set = (c: Camera) => { camera = c; scene?.setCamera(c); };
-  const fit = () => {
-    const zoom = Math.min(Math.max(Math.min(view.w / WORLD_PX.w, view.h / WORLD_PX.h), MIN_ZOOM), MAX_ZOOM);
-    set({ x: (WORLD_PX.w - view.w / zoom) / 2, y: (WORLD_PX.h - view.h / zoom) / 2, zoom });
-  };
+  const fit = () => set(fitRect(ISLAND_FIT_PX, view));
 
   onMount(() => {
     let alive = true;
