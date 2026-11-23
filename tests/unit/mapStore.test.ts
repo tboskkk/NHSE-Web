@@ -50,3 +50,12 @@ test("patchStructures with the wrong number of buildings throws and changes noth
   expect(store.map.plaza).toEqual({ x: 0, z: 0 });
   expect(store.version).toBe(0);
 });
+
+test("structuresVersion bumps only for structure patches, not tile patches", () => {
+  const store = createMapStore(view());
+  store.patch([{ layer: 0, index: 1, raw: "0000000000000002" }]);
+  expect(store.structuresVersion).toBe(0);
+  store.patchStructures({ buildings: store.map.buildings.map((b) => ({ ...b })), plaza: { x: 1, z: 2 } });
+  expect(store.structuresVersion).toBe(1);
+  expect(store.version).toBe(2);
+});

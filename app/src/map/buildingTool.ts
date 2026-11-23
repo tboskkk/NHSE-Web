@@ -55,3 +55,16 @@ export function addOp(map: MapData, acreW: number, type: number, at: { x: number
   const w = itemToWorld(acreW, at.x, at.y);
   return op("Add building", [{ slot, building: { type, x: w.x, y: w.y, angle: 0, bit: 0, subType: 0, typeArg: 0, uniqueId: id } }]);
 }
+
+/** Keeps a selection only while it still points at something: the plaza, or a slot that holds a building. */
+export function reconcileSelection(map: MapData, sel: Target | null): Target | null {
+  if (!sel || sel.kind === "plaza") return sel;
+  return (map.buildings[sel.slot]?.type ?? 0) !== 0 ? sel : null;
+}
+
+/** Number from an input's text, or null for blank/non-numeric (Number("") is 0, which must not become an edit). */
+export function parseField(text: string): number | null {
+  if (text.trim() === "") return null;
+  const n = Number(text);
+  return Number.isNaN(n) ? null : n;
+}

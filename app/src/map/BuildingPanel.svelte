@@ -1,7 +1,7 @@
 <script lang="ts">
   import { buildingTypeName, isKnownBuildingType, KNOWN_BUILDING_TYPES, skipsGroundRule, type BuildingEditOp, type MapData } from "@nhse/core";
   import { api, edit, showToast } from "../lib/state.svelte";
-  import { addOp, deleteOp, fieldOp, freeSlots, type Target } from "./buildingTool";
+  import { addOp, deleteOp, fieldOp, freeSlots, parseField, type Target } from "./buildingTool";
 
   let { map, version, acreW, selected = $bindable(), addType = $bindable() }: {
     map: MapData;
@@ -34,14 +34,18 @@
     return (e: Event) => {
       const el = e.currentTarget as HTMLInputElement | HTMLSelectElement;
       if (selected?.kind !== "building") return;
-      void run(fieldOp(map, selected.slot, { [key]: Number(el.value) }), el, String(original));
+      const n = parseField(el.value);
+      if (n === null) { showToast("Enter a number."); el.value = String(original); return; }
+      void run(fieldOp(map, selected.slot, { [key]: n }), el, String(original));
     };
   }
 
   function movePlaza(axis: "x" | "z", original: number) {
     return (e: Event) => {
       const el = e.currentTarget as HTMLInputElement;
-      void run({ op: "buildingEdit", label: "Move plaza", changes: [], plaza: { ...map.plaza, [axis]: Number(el.value) } }, el, String(original));
+      const n = parseField(el.value);
+      if (n === null) { showToast("Enter a number."); el.value = String(original); return; }
+      void run({ op: "buildingEdit", label: "Move plaza", changes: [], plaza: { ...map.plaza, [axis]: n } }, el, String(original));
     };
   }
 

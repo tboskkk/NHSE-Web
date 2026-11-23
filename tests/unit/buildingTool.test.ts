@@ -1,6 +1,6 @@
 import { expect, test } from "bun:test";
 import type { BuildingInfo } from "../../packages/core/src/map/building";
-import { addOp, deleteOp, fieldOp, freeSlots, hitTarget, moveOp, targetRect } from "../../app/src/map/buildingTool";
+import { addOp, deleteOp, fieldOp, freeSlots, hitTarget, moveOp, parseField, reconcileSelection, targetRect } from "../../app/src/map/buildingTool";
 import { emptyMap } from "./mapFixture";
 
 const bld = (type: number, x: number, y: number, over: Partial<BuildingInfo> = {}): BuildingInfo => ({ type, x, y, angle: 0, bit: 0, subType: 0, typeArg: 0, uniqueId: 0, ...over });
@@ -73,4 +73,22 @@ test("deleteOp yields a type 0 building and fieldOp patches one field", () => {
   expect(deleteOp(m, 2).changes[0]!.building.type).toBe(0);
   const f = fieldOp(m, 2, { subType: 9 });
   expect(f.changes[0]!.building).toEqual({ ...m.buildings[2]!, subType: 9 });
+});
+
+test("reconcileSelection keeps live buildings and the plaza, drops empty slots", () => {
+  const m = map();
+  expect(reconcileSelection(m, { kind: "building", slot: 2 })).toEqual({ kind: "building", slot: 2 });
+  expect(reconcileSelection(m, { kind: "plaza" })).toEqual({ kind: "plaza" });
+  expect(reconcileSelection(m, { kind: "building", slot: 5 })).toBeNull();
+  expect(reconcileSelection(m, { kind: "building", slot: 999 })).toBeNull();
+  expect(reconcileSelection(m, null)).toBeNull();
+});
+
+test("parseField refuses blank and non-numeric input instead of reading it as 0", () => {
+  expect(parseField("12")).toBe(12);
+  expect(parseField("0")).toBe(0);
+  expect(parseField("-3")).toBe(-3);
+  expect(parseField("")).toBeNull();
+  expect(parseField("   ")).toBeNull();
+  expect(parseField("abc")).toBeNull();
 });

@@ -1,6 +1,6 @@
 <script lang="ts">
   import { onMount } from "svelte";
-  import { checkPlacement, footprintTiles, isNone, itemFootprint, Item, ITEM_COUNT, rootOf } from "@nhse/core";
+  import { BUILDING_ITEM_TILES, checkPlacement, footprintTiles, isNone, itemFootprint, Item, ITEM_COUNT, rootOf } from "@nhse/core";
   import { fromZip } from "@nhse/io";
   import { api, app, edit, onMapTouched, onStructuresTouched, showToast } from "../../lib/state.svelte";
   import type { MapView as MapData } from "../../worker/protocol";
@@ -9,7 +9,7 @@
   import Inspector from "../../map/Inspector.svelte";
   import BulkPanel from "../../map/BulkPanel.svelte";
   import BuildingPanel from "../../map/BuildingPanel.svelte";
-  import { addOp, hitTarget, moveOp, targetRect, type Target } from "../../map/buildingTool";
+  import { addOp, hitTarget, moveOp, reconcileSelection, targetRect, type Target } from "../../map/buildingTool";
   import MapBrush from "../../map/MapBrush.svelte";
   import MapToolbar from "../../map/MapToolbar.svelte";
   import { createMapStore, type MapStore } from "../../map/mapStore";
@@ -37,6 +37,7 @@
   let brush = $state<bigint>(0xfffen);
   let store = $state.raw<MapStore | null>(null);
   let version = $state(0);
+  let structuresVersion = $state(0);
   let hoverItem = $state.raw<{ x: number; y: number } | null>(null);
   let stroke: Stroke | null = null;
   let strokeTick = $state(0);
@@ -60,13 +61,19 @@
   $effect(() => {
     if (!store) return;
     const s = store;
-    const off = s.subscribe((v) => (version = v));
+    const off = s.subscribe((v) => { version = v; structuresVersion = s.structuresVersion; });
     const offTouched = onMapTouched((t) => s.patch(t));
     const offStruct = onStructuresTouched((st) => s.patchStructures(st));
     return () => { off(); offTouched(); offStruct(); };
   });
 
   $effect(() => { if (tool !== "building") { selected = null; addType = null; drag = null; } });
+  // undo/redo patch buildings in place, so drop a selection whose slot was emptied
+  $effect(() => {
+    void version;
+    const st = store;
+    if (st && selected) { const r = reconcileSelection(st.map, selected); if (r !== selected) selected = r; }
+  });
 
   /** The building op the pointer is currently proposing (drag or add), with its footprint in item coordinates. */
   const candidate = $derived.by(() => {
@@ -79,7 +86,7 @@
     }
     if (addType !== null && hoverItem) {
       const op = addOp(st.map, acreW, addType, hoverItem);
-      return op ? { op, rect: { x: hoverItem.x, y: hoverItem.y, w: 4, h: 4 } } : null;
+      return op ? { op, rect: { x: hoverItem.x, y: hoverItem.y, w: BUILDING_ITEM_TILES, h: BUILDING_ITEM_TILES } } : null;
     }
     return null;
   });
@@ -238,7 +245,7 @@
       api.map(),
       acreTiles ? Promise.resolve(acreTiles) : fetch(`${base}data/acretiles.bin`).then((r) => (r.ok ? r.arrayBuffer() : Promise.reject(new Error(`acre templates failed to load (${r.status})`)))).then((b) => new Uint8Array(b)),
     ]).then(
-      ([m, a]) => { if (mine === token) { acreTiles = a; map = m; store = createMapStore(m); version = 0; } },
+      ([m, a]) => { if (mine === token) { acreTiles = a; map = m; store = createMapStore(m); version = 0; structuresVersion = 0; selected = null; drag = null; addType = null; } },
       (e) => { if (mine === token) error = e instanceof Error ? e.message : String(e); },
     );
   });
@@ -313,7 +320,7 @@
         <p class="muted">Loading map…</p>
       {:then { default: MapView }}
         {#key map}
-          <MapView {map} {acreTiles} {sprites} {layers} {version} {ghost} {paint} dim={editing ? (editLayer === 0 ? "items1" : "items0") : null} {onhover} onerror={(m) => (error = m)} />
+          <MapView {map} {acreTiles} {sprites} {layers} {version} {structuresVersion} {ghost} {paint} dim={editing ? (editLayer === 0 ? "items1" : "items0") : null} {onhover} onerror={(m) => (error = m)} />
         {/key}
       {:catch e}
         <p class="err" role="alert">The map viewer could not be loaded: {e instanceof Error ? e.message : String(e)}</p>
