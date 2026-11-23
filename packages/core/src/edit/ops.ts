@@ -4,6 +4,7 @@ import { Item } from "../structures/item";
 import type { GameStrings } from "../strings/gameStrings";
 import { type MapEditOp, planMapEdit, writeTiles } from "../map/applyMapEdit";
 import { type BuildingEditOp, planBuildingEdit, writeBuildingEdit } from "../map/applyBuildingEdit";
+import { planTerrainEdit, type TerrainEditOp, writeTerrain } from "../map/applyTerrainEdit";
 import { readMap } from "../map/mapData";
 
 /** Extra data some ops need that the save does not carry. */
@@ -23,6 +24,7 @@ export type EditOp =
   | { op: "setItem"; player: number; area: ItemArea; slot: number; raw: string /* 16 hex */ }
   | { op: "moveItem"; player: number; from: SlotRef; to: SlotRef } /* swap */
   | BuildingEditOp /* whole building slots + plaza; see map/applyBuildingEdit.ts */
+  | TerrainEditOp /* terrain tiles; see map/applyTerrainEdit.ts */
   | MapEditOp /* tiles of one field item layer; see map/applyMapEdit.ts */
   | { op: "batch"; label: string; ops: EditOp[] }; /* one undo step; describeOp returns label */
 
@@ -87,6 +89,10 @@ export function validateOp(save: HorizonSave, op: EditOp, env: OpEnv = {}): void
     buildingPlanFor(save, op, env);
     return;
   }
+  if (op.op === "terrainEdit") {
+    terrainPlanFor(save, op, env);
+    return;
+  }
   if (op.op !== "townName") personalOf(save, op.player);
   switch (op.op) {
     case "wallet":
@@ -132,6 +138,11 @@ function planFor(save: HorizonSave, op: MapEditOp, env: OpEnv) {
   return { map, tiles: planMapEdit({ map, acreTiles: env.acreTiles }, op) };
 }
 
+function terrainPlanFor(save: HorizonSave, op: TerrainEditOp, env: OpEnv) {
+  if (!env.acreTiles) throw new Error("Map data is not available.");
+  return planTerrainEdit({ map: readMap(save.main.data, save.revision), acreTiles: env.acreTiles }, op);
+}
+
 function buildingPlanFor(save: HorizonSave, op: BuildingEditOp, env: OpEnv) {
   if (!env.acreTiles) throw new Error("Map data is not available.");
   const map = readMap(save.main.data, save.revision);
@@ -152,6 +163,9 @@ function applyValidated(save: HorizonSave, op: EditOp, env: OpEnv): void {
       writeTiles(save.main.data, save.revision, op.layer, l.height, l.width, tiles, l.raw);
       return;
     }
+    case "terrainEdit":
+      writeTerrain(save.main.data, save.revision, terrainPlanFor(save, op, env));
+      return;
     case "buildingEdit": {
       const { before, after } = buildingPlanFor(save, op, env);
       writeBuildingEdit(save.main.data, save.revision, before, after);
@@ -246,6 +260,7 @@ export function describeOp(save: HorizonSave, strings: GameStrings, op: EditOp):
     }
     case "mapEdit":
     case "buildingEdit":
+    case "terrainEdit":
     case "batch":
       return op.label;
   }

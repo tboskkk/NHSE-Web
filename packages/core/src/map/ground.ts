@@ -33,17 +33,22 @@ function fromClass(c: number): Ground {
   return "blocked";
 }
 
+/** Template class of a world terrain-resolution tile when its acre is static, or null when the terrain layer decides (dynamic acre). */
+export function staticClassAt(ctx: GroundCtx, worldTx: number, worldTy: number): number | null {
+  const acre = ctx.map.acres[9 * (worldTy >> 4) + (worldTx >> 4)] ?? 0;
+  if (acre === 0 || acre >= ACRE_TEMPLATE_COUNT) return null;
+  const c = ctx.acreTiles[acre * 256 + (worldTy & 15) * 16 + (worldTx & 15)]!;
+  return c === DYNAMIC_CLASS ? null : c;
+}
+
 /** Ground under an item-layer tile: static acre template class if the acre has one, else the terrain layer; outside both is ocean. */
 export function groundAt(ctx: GroundCtx, itemX: number, itemY: number): Ground {
-  const { map, acreTiles } = ctx;
+  const { map } = ctx;
   const w = itemToWorld(map.items[0].width / 32, itemX, itemY);
   const twx = w.x >> 1;
   const twy = w.y >> 1;
-  const acre = map.acres[9 * (twy >> 4) + (twx >> 4)] ?? 0;
-  if (acre !== 0 && acre < ACRE_TEMPLATE_COUNT) {
-    const c = acreTiles[acre * 256 + (twy & 15) * 16 + (twx & 15)]!;
-    if (c !== DYNAMIC_CLASS) return fromClass(c);
-  }
+  const cls = staticClassAt(ctx, twx, twy);
+  if (cls !== null) return fromClass(cls);
   const tx = twx - TERRAIN_ORIGIN_TILES;
   const ty = twy - TERRAIN_ORIGIN_TILES;
   const t = map.terrain;

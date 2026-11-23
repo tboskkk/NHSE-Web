@@ -26,4 +26,5 @@ export * from "./map/applyMapEdit";
 export * from "./map/plan";
 export * from "./map/buildingTypes";
 export * from "./map/applyBuildingEdit";
+export * from "./map/applyTerrainEdit";
 export { BUILDING_COUNT, BUILDING_SIZE } from "./map/building";
