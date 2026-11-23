@@ -4,7 +4,7 @@ import {
   supportsFsAccess, toZip, writeFiles,
 } from "@nhse/io";
 import { createClient } from "./api";
-import type { LoadResult, Touched } from "../worker/protocol";
+import type { LoadResult, Structures, Touched } from "../worker/protocol";
 
 export type Section = "player" | "villagers" | "map" | "collections" | "island";
 
@@ -97,6 +97,14 @@ export function onMapTouched(cb: (t: Touched[]) => void): () => void {
 }
 const emitTouched = (t: Touched[]) => { if (t.length) for (const cb of mapTouchedListeners) cb(t); };
 
+const structuresListeners = new Set<(s: Structures) => void>();
+/** Registers a listener for buildings/plaza changed by an edit, undo or redo; returns an unsubscribe function. */
+export function onStructuresTouched(cb: (s: Structures) => void): () => void {
+  structuresListeners.add(cb);
+  return () => structuresListeners.delete(cb);
+}
+const emitStructures = (s: Structures | null) => { if (s) for (const cb of structuresListeners) cb(s); };
+
 /** Applies an edit op through the worker; the single entry point for UI edits. */
 export const edit = (op: EditOp) => track(doEdit(op));
 
@@ -107,6 +115,7 @@ async function doEdit(op: EditOp) {
     app.history = r.history;
     app.redoable = 0;
     emitTouched(r.touched);
+    emitStructures(r.structures);
     await refreshSummary();
     app.rev++;
     return r.change;
@@ -122,6 +131,7 @@ export async function undo() {
   const u = await api.undo();
   if (u.label) {
     emitTouched(u.touched);
+    emitStructures(u.structures);
     app.history = app.history.slice(0, -1);
     app.savedCount = Math.min(app.savedCount, app.history.length);
     app.redoable++;
@@ -135,6 +145,7 @@ export async function redo() {
   const r = await api.redo();
   if (r.label) {
     emitTouched(r.touched);
+    emitStructures(r.structures);
     app.history = [...app.history, r.label];
     app.redoable = Math.max(0, app.redoable - 1);
     await refreshSummary();

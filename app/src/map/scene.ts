@@ -21,6 +21,8 @@ export interface MapScene {
   setSprites(src: SpriteSource): void;
   /** Re-reads the item layers after they were patched in place. */
   invalidateItems(): void;
+  /** Redraws buildings and plaza from the (patched) map. */
+  invalidateBuildings(): void;
   setGhost(g: Ghost | null): void;
   setCamera(c: Camera): void;
   resize(w: number, h: number): void;
@@ -87,20 +89,24 @@ export async function createMapScene(canvas: HTMLCanvasElement, map: MapData, op
   grid.stroke({ width: 2, color: 0xffffff, alpha: 0.3 });
   layers.grid.addChild(grid);
 
-  // buildings + plaza
-  const plaza = layout.toWorldPx(map.plaza.x, map.plaza.z);
-  layers.buildings.addChild(
-    new Graphics().rect(plaza.x, plaza.y, PLAZA_TILES.w * PX_PER_ITEM_TILE, PLAZA_TILES.h * PX_PER_ITEM_TILE).fill({ color: 0xbc8f8f, alpha: 0.5 }),
-  );
-  for (const b of map.buildings) {
-    if (b.type === 0) continue;
-    const p = layout.toWorldPx(b.x, b.y);
-    const size = BUILDING_TILES * PX_PER_ITEM_TILE;
-    layers.buildings.addChild(new Graphics().rect(p.x, p.y, size, size).fill({ color: 0xffd400, alpha: 0.6 }).stroke({ width: 2, color: 0x202020 }));
-    const label = new Text({ text: opts.buildingName(b.type), style: { fontSize: 18, fill: 0x101010, fontFamily: "sans-serif" } });
-    label.position.set(p.x + 4, p.y + 4);
-    layers.buildings.addChild(label);
-  }
+  // buildings + plaza (redrawn from map.buildings/map.plaza by invalidateBuildings)
+  const drawBuildings = () => {
+    for (const c of layers.buildings.removeChildren()) c.destroy();
+    const plaza = layout.toWorldPx(map.plaza.x, map.plaza.z);
+    layers.buildings.addChild(
+      new Graphics().rect(plaza.x, plaza.y, PLAZA_TILES.w * PX_PER_ITEM_TILE, PLAZA_TILES.h * PX_PER_ITEM_TILE).fill({ color: 0xbc8f8f, alpha: 0.5 }),
+    );
+    for (const b of map.buildings) {
+      if (b.type === 0) continue;
+      const p = layout.toWorldPx(b.x, b.y);
+      const size = BUILDING_TILES * PX_PER_ITEM_TILE;
+      layers.buildings.addChild(new Graphics().rect(p.x, p.y, size, size).fill({ color: 0xffd400, alpha: 0.6 }).stroke({ width: 2, color: 0x202020 }));
+      const label = new Text({ text: opts.buildingName(b.type), style: { fontSize: 18, fill: 0x101010, fontFamily: "sans-serif" } });
+      label.position.set(p.x + 4, p.y + 4);
+      layers.buildings.addChild(label);
+    }
+  };
+  drawBuildings();
 
   // item sprites: pooled, only for tiles in view; textures load lazily and trigger a refresh when ready
   const textures = new Map<string, Texture | "loading" | "failed">();
@@ -190,6 +196,10 @@ export async function createMapScene(canvas: HTMLCanvasElement, map: MapData, op
     },
     invalidateItems() {
       refresh();
+    },
+    invalidateBuildings() {
+      drawBuildings();
+      schedule();
     },
     setGhost(gh) {
       ghostLayer.visible = gh !== null;

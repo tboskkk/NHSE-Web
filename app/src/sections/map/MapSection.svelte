@@ -2,7 +2,7 @@
   import { onMount } from "svelte";
   import { checkPlacement, footprintTiles, isNone, itemFootprint, Item, ITEM_COUNT, rootOf } from "@nhse/core";
   import { fromZip } from "@nhse/io";
-  import { api, app, edit, onMapTouched, showToast } from "../../lib/state.svelte";
+  import { api, app, edit, onMapTouched, onStructuresTouched, showToast } from "../../lib/state.svelte";
   import type { MapView as MapData } from "../../worker/protocol";
   import { inspectTile, type Inspection } from "../../map/inspect";
   import { makeLayout } from "../../map/layout";
@@ -53,7 +53,8 @@
     const s = store;
     const off = s.subscribe((v) => (version = v));
     const offTouched = onMapTouched((t) => s.patch(t));
-    return () => { off(); offTouched(); };
+    const offStruct = onStructuresTouched((st) => s.patchStructures(st));
+    return () => { off(); offTouched(); offStruct(); };
   });
 
   const placeCtx = () => (store && acreTiles ? { map: store.map, acreTiles } : null);

@@ -69,7 +69,7 @@
 
   $effect(() => { for (const id of Object.keys(layers) as LayerId[]) scene?.setLayerVisible(id, layers[id]); });
   $effect(() => { scene?.setSprites(sprites); });
-  $effect(() => { void version; scene?.invalidateItems(); });
+  $effect(() => { void version; scene?.invalidateItems(); scene?.invalidateBuildings(); });
   $effect(() => { scene?.setGhost(ghost); });
   $effect(() => { for (const id of ["items0", "items1"] as const) scene?.setLayerAlpha(id, dim === id ? 0.3 : 1); });
 
